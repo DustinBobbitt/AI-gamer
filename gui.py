@@ -525,6 +525,7 @@ class GameLearningApp(tk.Tk):
     def _generate_semiprime(self) -> None:
         try:
             import random
+            import time
             from utils.primes import is_prime, generate_prime
             
             p_low = int(self.p_low_var.get())
@@ -532,25 +533,82 @@ class GameLearningApp(tk.Tk):
             q_low = int(self.q_low_var.get())
             q_high = int(self.q_high_var.get())
             
-            # Generate two primes
+            timeout = 8.0  # seconds
+            max_attempts = 10000
+            
+            # Generate p with timeout
+            start_time = time.time()
             p = random.randint(p_low, p_high)
+            attempts = 0
             while not is_prime(p):
+                if time.time() - start_time > timeout:
+                    messagebox.showerror(
+                        "CDI",
+                        f"Could not find prime in range [{p_low}, {p_high}] within {timeout} seconds.\n" +
+                        "Try a larger range or smaller numbers."
+                    )
+                    return
+                attempts += 1
+                if attempts > max_attempts:
+                    messagebox.showerror(
+                        "CDI",
+                        f"Could not find prime in range [{p_low}, {p_high}] after {max_attempts} attempts.\n" +
+                        "This range may have very few primes. Try a larger range."
+                    )
+                    return
                 p = random.randint(p_low, p_high)
             
+            # Generate q with timeout
+            start_time = time.time()
             q = random.randint(q_low, q_high)
+            attempts = 0
             while not is_prime(q):
+                if time.time() - start_time > timeout:
+                    messagebox.showerror(
+                        "CDI",
+                        f"Could not find prime in range [{q_low}, {q_high}] within {timeout} seconds.\n" +
+                        "Try a larger range or smaller numbers."
+                    )
+                    return
+                attempts += 1
+                if attempts > max_attempts:
+                    messagebox.showerror(
+                        "CDI",
+                        f"Could not find prime in range [{q_low}, {q_high}] after {max_attempts} attempts.\n" +
+                        "This range may have very few primes. Try a larger range."
+                    )
+                    return
                 q = random.randint(q_low, q_high)
             
+            # Ensure p != q if not allowed
             if not self.gen_allow_equal_var.get() and p == q:
-                # Try again for q
+                start_time = time.time()
+                attempts = 0
                 q = random.randint(q_low, q_high)
                 while not is_prime(q) or q == p:
+                    if time.time() - start_time > timeout:
+                        messagebox.showerror(
+                            "CDI",
+                            f"Could not find distinct prime in range [{q_low}, {q_high}] within {timeout} seconds.\n" +
+                            "Try a larger range or allow p=q."
+                        )
+                        return
+                    attempts += 1
+                    if attempts > max_attempts:
+                        messagebox.showerror(
+                            "CDI",
+                            f"Could not find distinct prime after {max_attempts} attempts.\n" +
+                            "Try a larger range or allow p=q."
+                        )
+                        return
                     q = random.randint(q_low, q_high)
             
             n = p * q
             self.target_n_var.set(str(n))
             self._append_inference_log(f"Generated: N = {p} × {q} = {n}")
             
+        except ValueError as e:
+            messagebox.showerror("CDI", f"Invalid range values:\n{e}")
         except Exception as e:
             messagebox.showerror("CDI", f"Error generating semiprime:\n{e}")
     
@@ -815,7 +873,21 @@ class GameLearningApp(tk.Tk):
     def _run_inference(self, config: dict) -> None:
         """Execute an inference run on a specific target N."""
         import json
+        import random
         from datetime import datetime
+        
+        # Import numpy here to catch missing module error gracefully
+        try:
+            import numpy as np
+        except ImportError:
+            messagebox.showerror(
+                "CDI",
+                "NumPy is required for inference but not installed.\n\n" +
+                "Please install it with:\n" +
+                "pip install numpy"
+            )
+            return
+        
         from domains.arithmetic.env import SemiprimeInferenceEnv
         from domains.arithmetic.verifier import verify_factors_from_belief, run_baseline_fermat, run_baseline_trial_division
         from domains.arithmetic.reporting import write_summary_txt, VerificationResult, BaselineComparison
@@ -867,7 +939,6 @@ class GameLearningApp(tk.Tk):
         
         while not done and step < max_steps:
             # Simple random policy (TODO: integrate with Brain)
-            import random
             action = random.randint(0, len(env.get_action_space()) - 1)
             
             obs, reward, done, info = env.step(action)
