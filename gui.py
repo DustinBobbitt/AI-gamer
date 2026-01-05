@@ -28,12 +28,13 @@ class GameLearningApp(tk.Tk):
 
     def __init__(self) -> None:
         super().__init__()
-        self.title("Self-Improving Game-Learning AI – Meta-Learning System")
-        self.geometry("1000x700")
+        self.title("CDI — Constraint Discovery & Inference System")
+        self.geometry("1100x750")
 
         self._worker_thread: Optional[threading.Thread] = None
         self._results_window: Optional["ResultViewerWindow"] = None
         self._last_run_dir: Optional[Path] = None
+        self._last_mode: str = "meta_learning"  # or "inference"
 
         self._build_widgets()
 
@@ -42,743 +43,720 @@ class GameLearningApp(tk.Tk):
         main = ttk.Frame(self)
         main.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Configuration area
-        cfg_frame = ttk.LabelFrame(main, text="Meta-Learning Configuration")
-        cfg_frame.pack(fill=tk.X, pady=5)
+        # Create tabbed interface
+        self.notebook = ttk.Notebook(main)
+        self.notebook.pack(fill=tk.BOTH, expand=True)
 
-        # Total phases
-        ttk.Label(cfg_frame, text="Training Phases:").grid(row=0, column=0, sticky=tk.W, padx=2, pady=2)
-        self.phases_var = tk.StringVar(value="10")
-        ttk.Entry(cfg_frame, textvariable=self.phases_var, width=10).grid(
+        # Create tabs
+        self.tab_meta_learning = ttk.Frame(self.notebook)
+        self.tab_inference = ttk.Frame(self.notebook)
+        self.tab_results = ttk.Frame(self.notebook)
+
+        self.notebook.add(self.tab_meta_learning, text="1. Meta-Learning")
+        self.notebook.add(self.tab_inference, text="2. Inference")
+        self.notebook.add(self.tab_results, text="3. Results")
+
+        # Build each tab
+        self._build_meta_learning_tab()
+        self._build_inference_tab()
+        self._build_results_tab()
+
+    # TAB 1: META-LEARNING -----------------------------------------------
+    def _build_meta_learning_tab(self) -> None:
+        tab = self.tab_meta_learning
+        
+        # Training configuration section
+        cfg_frame = ttk.LabelFrame(tab, text="Training Configuration")
+        cfg_frame.pack(fill=tk.X, pady=5, padx=5)
+
+        # Number of games
+        ttk.Label(cfg_frame, text="Number of games:").grid(row=0, column=0, sticky=tk.W, padx=2, pady=2)
+        self.n_games_var = tk.StringVar(value="10")
+        ttk.Entry(cfg_frame, textvariable=self.n_games_var, width=10).grid(
             row=0, column=1, sticky=tk.W, padx=2, pady=2
         )
-        ttk.Label(cfg_frame, text="(Acquisition-Consolidation cycles)").grid(
+        ttk.Label(cfg_frame, text="(Different scenarios to learn from)").grid(
             row=0, column=2, sticky=tk.W, padx=5, pady=2
         )
 
-        # Games per phase
-        ttk.Label(cfg_frame, text="Games per Phase:").grid(row=1, column=0, sticky=tk.W, padx=2, pady=2)
-        self.games_var = tk.StringVar(value="10")
-        ttk.Entry(cfg_frame, textvariable=self.games_var, width=10).grid(
+        # Acquisition rounds
+        ttk.Label(cfg_frame, text="Acquisition rounds:").grid(row=1, column=0, sticky=tk.W, padx=2, pady=2)
+        self.acq_rounds_var = tk.StringVar(value="5")
+        ttk.Entry(cfg_frame, textvariable=self.acq_rounds_var, width=10).grid(
             row=1, column=1, sticky=tk.W, padx=2, pady=2
         )
+        ttk.Label(cfg_frame, text="(Training iterations per game)").grid(
+            row=1, column=2, sticky=tk.W, padx=5, pady=2
+        )
 
-        # Episodes per game
-        ttk.Label(cfg_frame, text="Episodes per Game:").grid(row=2, column=0, sticky=tk.W, padx=2, pady=2)
-        self.episodes_var = tk.StringVar(value="100")
-        ttk.Entry(cfg_frame, textvariable=self.episodes_var, width=10).grid(
+        # Consolidation budget
+        ttk.Label(cfg_frame, text="Consolidation budget:").grid(row=2, column=0, sticky=tk.W, padx=2, pady=2)
+        self.cons_budget_var = tk.StringVar(value="100")
+        ttk.Entry(cfg_frame, textvariable=self.cons_budget_var, width=10).grid(
             row=2, column=1, sticky=tk.W, padx=2, pady=2
         )
+        ttk.Label(cfg_frame, text="(Resources for knowledge compression)").grid(
+            row=2, column=2, sticky=tk.W, padx=5, pady=2
+        )
 
-        # Consolidation frequency
-        ttk.Label(cfg_frame, text="Consolidation Frequency:").grid(row=3, column=0, sticky=tk.W, padx=2, pady=2)
-        self.consolidation_freq_var = tk.StringVar(value="5")
-        ttk.Entry(cfg_frame, textvariable=self.consolidation_freq_var, width=10).grid(
+        # Test games
+        ttk.Label(cfg_frame, text="Test games:").grid(row=3, column=0, sticky=tk.W, padx=2, pady=2)
+        self.test_games_var = tk.StringVar(value="3")
+        ttk.Entry(cfg_frame, textvariable=self.test_games_var, width=10).grid(
             row=3, column=1, sticky=tk.W, padx=2, pady=2
         )
-        ttk.Label(cfg_frame, text="(Every N phases)").grid(
+        ttk.Label(cfg_frame, text="(Validation games after training)").grid(
             row=3, column=2, sticky=tk.W, padx=5, pady=2
         )
 
-        # Target compression
-        ttk.Label(cfg_frame, text="Target Compression:").grid(row=4, column=0, sticky=tk.W, padx=2, pady=2)
-        self.compression_var = tk.StringVar(value="0.3")
-        ttk.Entry(cfg_frame, textvariable=self.compression_var, width=10).grid(
-            row=4, column=1, sticky=tk.W, padx=2, pady=2
-        )
-        ttk.Label(cfg_frame, text="(0.3 = 30% reduction)").grid(
-            row=4, column=2, sticky=tk.W, padx=5, pady=2
-        )
+        # Game family
+        ttk.Label(cfg_frame, text="Game family:").grid(row=4, column=0, sticky=tk.W, padx=2, pady=2)
+        self.game_family_var = tk.StringVar(value="TicTacToe")
+        game_combo = ttk.Combobox(cfg_frame, textvariable=self.game_family_var,
+                                  values=["TicTacToe", "NumberGuessing", "Mixed"],
+                                  state="readonly", width=15)
+        game_combo.grid(row=4, column=1, sticky=tk.W, padx=2, pady=2)
+
+        # Consolidation strategy
+        ttk.Label(cfg_frame, text="Consolidation strategy:").grid(row=5, column=0, sticky=tk.W, padx=2, pady=2)
+        self.cons_strategy_var = tk.StringVar(value="prune")
+        cons_combo = ttk.Combobox(cfg_frame, textvariable=self.cons_strategy_var,
+                                  values=["prune", "merge", "compress", "distill"],
+                                  state="readonly", width=15)
+        cons_combo.grid(row=5, column=1, sticky=tk.W, padx=2, pady=2)
+
+        # Options
+        options_frame = ttk.LabelFrame(tab, text="Options")
+        options_frame.pack(fill=tk.X, pady=5, padx=5)
+        
+        self.random_seed_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            options_frame,
+            text="Use random seed each run (recommended)",
+            variable=self.random_seed_var
+        ).grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        
+        self.reset_policy_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            options_frame,
+            text="Reset learned policy at start",
+            variable=self.reset_policy_var
+        ).grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
 
         # Output directory
-        ttk.Label(cfg_frame, text="Output Folder:").grid(row=5, column=0, sticky=tk.E, padx=2, pady=2)
+        output_frame = ttk.Frame(tab)
+        output_frame.pack(fill=tk.X, pady=5, padx=5)
+        ttk.Label(output_frame, text="Output Folder:").pack(side=tk.LEFT, padx=2)
         self.out_var = tk.StringVar(value="meta_learning_runs")
-        out_entry = ttk.Entry(cfg_frame, textvariable=self.out_var, width=40)
-        out_entry.grid(row=5, column=1, columnspan=4, sticky=tk.W, padx=2, pady=2)
-        ttk.Button(cfg_frame, text="Browse...", command=self._browse_out_dir).grid(
-            row=5, column=5, sticky=tk.W, padx=2, pady=2
+        out_entry = ttk.Entry(output_frame, textvariable=self.out_var, width=40)
+        out_entry.pack(side=tk.LEFT, padx=2)
+        ttk.Button(output_frame, text="Browse...", command=self._browse_out_dir).pack(side=tk.LEFT, padx=2)
+        
+        # Control buttons
+        btn_frame = ttk.Frame(tab)
+        btn_frame.pack(fill=tk.X, pady=5, padx=5)
+
+        self.meta_run_button = ttk.Button(btn_frame, text="▶ Start Meta-Learning", command=self._on_meta_learning_clicked)
+        self.meta_run_button.pack(side=tk.LEFT, padx=2)
+
+        ttk.Button(btn_frame, text="📊 View Results", command=self._switch_to_results_tab).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_frame, text="📁 Open Run Folder", command=self._open_run_folder).pack(side=tk.LEFT, padx=2)
+
+        # Status and progress
+        status_frame = ttk.Frame(tab)
+        status_frame.pack(fill=tk.X, pady=2, padx=5)
+        
+        self.meta_status_var = tk.StringVar(value="Ready.")
+        ttk.Label(status_frame, textvariable=self.meta_status_var).pack(side=tk.LEFT, padx=5)
+        
+        self.meta_progress = ttk.Progressbar(status_frame, orient="horizontal", length=300, mode="determinate")
+        self.meta_progress.pack(side=tk.LEFT, padx=5)
+
+        # Log area
+        log_frame = ttk.LabelFrame(tab, text="Run Summary (live)")
+        log_frame.pack(fill=tk.BOTH, expand=True, pady=5, padx=5)
+
+        self.meta_log_text = tk.Text(log_frame, wrap=tk.WORD, height=15)
+        self.meta_log_text.pack(fill=tk.BOTH, expand=True)
+        
+        # Scrollbar
+        meta_scrollbar = ttk.Scrollbar(log_frame, command=self.meta_log_text.yview)
+        meta_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.meta_log_text.config(yscrollcommand=meta_scrollbar.set)
+
+    # TAB 2: INFERENCE ---------------------------------------------------
+    def _build_inference_tab(self) -> None:
+        tab = self.tab_inference
+        
+        # Target Number section
+        target_frame = ttk.LabelFrame(tab, text="Target Number")
+        target_frame.pack(fill=tk.X, pady=5, padx=5)
+        
+        ttk.Label(target_frame, text="Target N:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        self.target_n_var = tk.StringVar(value="")
+        target_entry = ttk.Entry(target_frame, textvariable=self.target_n_var, width=60)
+        target_entry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
+        target_frame.columnconfigure(1, weight=1)
+        
+        ttk.Label(target_frame, text="(Supports large integers)").grid(
+            row=1, column=1, sticky=tk.W, padx=5, pady=2
         )
-
-        # Control buttons and status
-        btn_frame = ttk.Frame(main)
-        btn_frame.pack(fill=tk.X, pady=5)
-
-        self.run_button = ttk.Button(btn_frame, text="▶ Start Meta-Learning", command=self._on_run_clicked)
-        self.run_button.pack(side=tk.LEFT)
-
-        ttk.Button(
-            btn_frame,
-            text="📊 View Results",
-            command=self._open_results_window,
-        ).pack(side=tk.LEFT, padx=10)
-
-        ttk.Button(
-            btn_frame,
-            text="Open Run Folder",
-            command=self._open_run_folder,
-        ).pack(side=tk.LEFT, padx=10)
-
-        self.status_var = tk.StringVar(value="Ready.")
-        ttk.Label(btn_frame, textvariable=self.status_var).pack(side=tk.LEFT, padx=10)
-
-        self.progress = ttk.Progressbar(
-            btn_frame, orient="horizontal", length=250, mode="determinate"
+        
+        # Assumptions section
+        assumptions_frame = ttk.LabelFrame(tab, text="Assumptions / Scenario")
+        assumptions_frame.pack(fill=tk.X, pady=5, padx=5)
+        
+        self.assume_odd_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(assumptions_frame, text="Assume N is odd", variable=self.assume_odd_var).grid(
+            row=0, column=0, sticky=tk.W, padx=5, pady=2
         )
-        self.progress.pack(side=tk.LEFT, padx=10)
+        
+        self.assume_semiprime_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(assumptions_frame, text="Assume N is semiprime (p×q)", variable=self.assume_semiprime_var).grid(
+            row=1, column=0, sticky=tk.W, padx=5, pady=2
+        )
+        
+        self.allow_square_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(assumptions_frame, text="Allow p=q (semiprime square)", variable=self.allow_square_var).grid(
+            row=2, column=0, sticky=tk.W, padx=5, pady=2
+        )
+        
+        self.use_learned_policy_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(assumptions_frame, text="Use learned policy", variable=self.use_learned_policy_var,
+                       command=self._on_policy_toggle).grid(
+            row=0, column=1, sticky=tk.W, padx=5, pady=2
+        )
+        
+        self.use_baseline_policy_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(assumptions_frame, text="Use baseline policy", variable=self.use_baseline_policy_var,
+                       command=self._on_policy_toggle).grid(
+            row=1, column=1, sticky=tk.W, padx=5, pady=2
+        )
+        
+        self.show_debug_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(assumptions_frame, text="Show debug details", variable=self.show_debug_var).grid(
+            row=2, column=1, sticky=tk.W, padx=5, pady=2
+        )
+        
+        self.allow_update_policy_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(assumptions_frame, text="Allow inference to update policy", variable=self.allow_update_policy_var).grid(
+            row=3, column=0, columnspan=2, sticky=tk.W, padx=5, pady=2
+        )
+        
+        # Inference Limits section
+        limits_frame = ttk.LabelFrame(tab, text="Inference Limits")
+        limits_frame.pack(fill=tk.X, pady=5, padx=5)
+        
+        ttk.Label(limits_frame, text="Max inference steps:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        self.max_steps_var = tk.StringVar(value="200")
+        ttk.Entry(limits_frame, textvariable=self.max_steps_var, width=10).grid(
+            row=0, column=1, sticky=tk.W, padx=5, pady=2
+        )
+        
+        ttk.Label(limits_frame, text="Stop if entropy change <").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
+        self.epsilon_var = tk.StringVar(value="1e-4")
+        ttk.Entry(limits_frame, textvariable=self.epsilon_var, width=10).grid(
+            row=1, column=1, sticky=tk.W, padx=5, pady=2
+        )
+        
+        ttk.Label(limits_frame, text="Display precision (digits):").grid(row=2, column=0, sticky=tk.W, padx=5, pady=2)
+        self.display_precision_var = tk.StringVar(value="20")
+        ttk.Entry(limits_frame, textvariable=self.display_precision_var, width=10).grid(
+            row=2, column=1, sticky=tk.W, padx=5, pady=2
+        )
+        
+        # Test scenario presets
+        preset_frame = ttk.Frame(tab)
+        preset_frame.pack(fill=tk.X, pady=5, padx=5)
+        
+        ttk.Label(preset_frame, text="Test scenario presets:").pack(side=tk.LEFT, padx=5)
+        self.preset_var = tk.StringVar(value="Medium")
+        preset_combo = ttk.Combobox(preset_frame, textvariable=self.preset_var,
+                                    values=["Small demo (fast)", "Medium", "Large"],
+                                    state="readonly", width=20)
+        preset_combo.pack(side=tk.LEFT, padx=5)
+        preset_combo.bind("<<ComboboxSelected>>", self._on_preset_selected)
+        
+        # Generate random semiprime
+        gen_frame = ttk.LabelFrame(tab, text="Generate Random Semiprime")
+        gen_frame.pack(fill=tk.X, pady=5, padx=5)
+        
+        ttk.Label(gen_frame, text="p range:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        self.p_low_var = tk.StringVar(value="1000")
+        ttk.Entry(gen_frame, textvariable=self.p_low_var, width=12).grid(row=0, column=1, padx=2, pady=2)
+        ttk.Label(gen_frame, text="to").grid(row=0, column=2, padx=2)
+        self.p_high_var = tk.StringVar(value="10000")
+        ttk.Entry(gen_frame, textvariable=self.p_high_var, width=12).grid(row=0, column=3, padx=2, pady=2)
+        
+        ttk.Label(gen_frame, text="q range:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
+        self.q_low_var = tk.StringVar(value="1000")
+        ttk.Entry(gen_frame, textvariable=self.q_low_var, width=12).grid(row=1, column=1, padx=2, pady=2)
+        ttk.Label(gen_frame, text="to").grid(row=1, column=2, padx=2)
+        self.q_high_var = tk.StringVar(value="10000")
+        ttk.Entry(gen_frame, textvariable=self.q_high_var, width=12).grid(row=1, column=3, padx=2, pady=2)
+        
+        self.gen_allow_equal_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(gen_frame, text="Allow p=q", variable=self.gen_allow_equal_var).grid(
+            row=0, column=4, padx=10, pady=2
+        )
+        
+        ttk.Button(gen_frame, text="🎲 Generate", command=self._generate_semiprime).grid(
+            row=1, column=4, padx=10, pady=2
+        )
+        
+        # Control buttons
+        btn_frame = ttk.Frame(tab)
+        btn_frame.pack(fill=tk.X, pady=5, padx=5)
+        
+        self.inference_run_button = ttk.Button(btn_frame, text="▶ Run Inference Only", 
+                                               command=self._on_inference_clicked)
+        self.inference_run_button.pack(side=tk.LEFT, padx=2)
+        
+        ttk.Button(btn_frame, text="📊 View Results", command=self._switch_to_results_tab).pack(side=tk.LEFT, padx=2)
+        
+        # Status and progress
+        status_frame = ttk.Frame(tab)
+        status_frame.pack(fill=tk.X, pady=2, padx=5)
+        
+        self.inference_status_var = tk.StringVar(value="Ready. Enter target N above.")
+        ttk.Label(status_frame, textvariable=self.inference_status_var).pack(side=tk.LEFT, padx=5)
+        
+        self.inference_progress = ttk.Progressbar(status_frame, orient="horizontal", length=300, mode="determinate")
+        self.inference_progress.pack(side=tk.LEFT, padx=5)
+        
+        # Log area
+        log_frame = ttk.LabelFrame(tab, text="Inference Log")
+        log_frame.pack(fill=tk.BOTH, expand=True, pady=5, padx=5)
+        
+        self.inference_log_text = tk.Text(log_frame, wrap=tk.WORD, height=10)
+        self.inference_log_text.pack(fill=tk.BOTH, expand=True)
+        
+        inference_scrollbar = ttk.Scrollbar(log_frame, command=self.inference_log_text.yview)
+        inference_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.inference_log_text.config(yscrollcommand=inference_scrollbar.set)
 
-        # Log / output area
-        log_frame = ttk.LabelFrame(main, text="Run Summary (live)")
-        log_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+    # TAB 3: RESULTS -----------------------------------------------------
+    def _build_results_tab(self) -> None:
+        tab = self.tab_results
+        
+        # Header
+        header_frame = ttk.Frame(tab)
+        header_frame.pack(fill=tk.X, pady=5, padx=5)
+        
+        self.results_header_text = tk.StringVar(value="No results loaded.")
+        ttk.Label(header_frame, textvariable=self.results_header_text, font=("", 11, "bold")).pack(anchor=tk.W)
+        
+        # Control buttons
+        btn_frame = ttk.Frame(tab)
+        btn_frame.pack(fill=tk.X, pady=5, padx=5)
+        
+        ttk.Button(btn_frame, text="🔄 Reload Latest", command=self._reload_latest_results).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_frame, text="📋 Copy Summary", command=self._copy_results_summary).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_frame, text="📁 Open Run Folder", command=self._open_run_folder).pack(side=tk.LEFT, padx=2)
+        
+        # Results display
+        results_notebook = ttk.Notebook(tab)
+        results_notebook.pack(fill=tk.BOTH, expand=True, pady=5, padx=5)
+        
+        # Summary tab
+        summary_tab = ttk.Frame(results_notebook)
+        results_notebook.add(summary_tab, text="Summary")
+        
+        self.results_summary_text = tk.Text(summary_tab, wrap=tk.WORD)
+        self.results_summary_text.pack(fill=tk.BOTH, expand=True)
+        
+        summary_scrollbar = ttk.Scrollbar(summary_tab, command=self.results_summary_text.yview)
+        summary_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.results_summary_text.config(yscrollcommand=summary_scrollbar.set)
+        
+        # Belief State tab
+        belief_tab = ttk.Frame(results_notebook)
+        results_notebook.add(belief_tab, text="Belief State")
+        
+        self.belief_text = tk.Text(belief_tab, wrap=tk.WORD)
+        self.belief_text.pack(fill=tk.BOTH, expand=True)
+        
+        belief_scrollbar = ttk.Scrollbar(belief_tab, command=self.belief_text.yview)
+        belief_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.belief_text.config(yscrollcommand=belief_scrollbar.set)
+        
+        # Explanation panel
+        explain_frame = ttk.LabelFrame(tab, text="Interpretation (Caution: Not Certainty)")
+        explain_frame.pack(fill=tk.X, pady=5, padx=5)
+        
+        self.explanation_text = tk.Text(explain_frame, wrap=tk.WORD, height=4)
+        self.explanation_text.pack(fill=tk.BOTH, padx=5, pady=5)
 
-        self.log_text = tk.Text(log_frame, wrap=tk.WORD, height=20)
-        self.log_text.pack(fill=tk.BOTH, expand=True)
-
-        # Footer
-        footer = ttk.Frame(main)
-        footer.pack(fill=tk.X, pady=5)
-        ttk.Label(footer, text=f"Game-Learning AI v{__version__} – Learning to Learn").pack(side=tk.RIGHT)
-
-    # Basic helpers -------------------------------------------------------
+    # EVENT HANDLERS ======================================================
+    
+    # Meta-Learning Tab Handlers ------------------------------------------
     def _browse_out_dir(self) -> None:
         selected = filedialog.askdirectory(title="Select output base directory")
         if selected:
             self.out_var.set(selected)
-
-    def _append_log(self, text: str) -> None:
-        self.log_text.insert(tk.END, text + "\n")
-        self.log_text.see(tk.END)
-
-    def _open_run_folder(self) -> None:
-        """Open the last run folder in the system file explorer."""
-        import os
-
-        if not self._last_run_dir:
-            messagebox.showinfo("Prime Ice", "No run has been completed yet.")
-            return
-        try:
-            os.startfile(self._last_run_dir)  # type: ignore[attr-defined]
-        except Exception as exc:
-            messagebox.showerror("Prime Ice", f"Could not open folder:\n{exc}")
-
-    # Results viewer handling --------------------------------------------
-    def _open_results_window(self, initial_run_dir: Optional[Path] = None) -> None:
-        if self._results_window is None or not self._results_window.winfo_exists():
-            self._results_window = ResultViewerWindow(self, initial_run_dir)
-        else:
-            self._results_window.lift()
-            if initial_run_dir is not None:
-                self._results_window.load_run(initial_run_dir)
-
-    # Run control ---------------------------------------------------------
-    def _on_run_clicked(self) -> None:
+    
+    def _on_meta_learning_clicked(self) -> None:
         if self._worker_thread and self._worker_thread.is_alive():
-            messagebox.showinfo("Game-Learning AI", "A training run is already in progress.")
+            messagebox.showinfo("CDI", "A training run is already in progress.")
             return
+        
+        # Validate inputs
         try:
-            phases = int(self.phases_var.get())
-            games_per_phase = int(self.games_var.get())
-            episodes_per_game = int(self.episodes_var.get())
-            consolidation_freq = int(self.consolidation_freq_var.get())
-            compression = float(self.compression_var.get())
-            out_base = self.out_var.get()
-        except ValueError as exc:
-            messagebox.showerror("Invalid input", f"Please check numeric fields.\n\n{exc}")
+            n_games = int(self.n_games_var.get())
+            acq_rounds = int(self.acq_rounds_var.get())
+            cons_budget = int(self.cons_budget_var.get())
+            test_games = int(self.test_games_var.get())
+            
+            if n_games < 1 or acq_rounds < 1 or cons_budget < 1 or test_games < 1:
+                raise ValueError("All values must be positive integers")
+        except ValueError as e:
+            messagebox.showerror("CDI", f"Invalid configuration: {e}")
             return
-
-        self.run_button.config(state=tk.DISABLED)
-        self.progress["value"] = 0
-        self.progress["maximum"] = phases
-        self.status_var.set("Initializing meta-learning...")
-        self.log_text.delete("1.0", tk.END)
-        self._append_log("=== Self-Improving Game-Learning AI ===")
-        self._append_log(f"Phases: {phases}")
-        self._append_log(f"Games per phase: {games_per_phase}")
-        self._append_log(f"Episodes per game: {episodes_per_game}")
-        self._append_log(f"Consolidation every: {consolidation_freq} phases")
-        self._append_log(f"Target compression: {compression*100:.0f}%")
-        self._append_log("")
-
-        def worker() -> None:
+        
+        # Clear log
+        self.meta_log_text.delete(1.0, tk.END)
+        
+        # Build config
+        config = {
+            "n_games": n_games,
+            "acq_rounds": acq_rounds,
+            "cons_budget": cons_budget,
+            "test_games": test_games,
+            "game_family": self.game_family_var.get(),
+            "consolidation_strategies": self.cons_strategy_var.get(),
+            "options": {
+                "random_seed": self.random_seed_var.get(),
+                "reset_policy_each_run": self.reset_policy_var.get()
+            }
+        }
+        
+        # Run in background thread
+        self.meta_run_button.config(state=tk.DISABLED)
+        self.meta_status_var.set("Meta-learning in progress...")
+        self.meta_progress["value"] = 0
+        
+        def run_meta_learning():
             try:
-                self._run_meta_learning(
-                    phases=phases,
-                    games_per_phase=games_per_phase,
-                    episodes_per_game=episodes_per_game,
-                    consolidation_freq=consolidation_freq,
-                    compression=compression,
-                    out_base=out_base
-                )
+                self._append_meta_log("Starting meta-learning run...")
+                self._run_meta_learning(config)
+                self.after(0, lambda: self.meta_status_var.set("✓ Meta-learning complete!"))
+                self.after(0, lambda: self._switch_to_results_tab())
             except Exception as exc:
-                import traceback
-                error_msg = f"{str(exc)}\n\n{traceback.format_exc()}"
-                self.after(
-                    0,
-                    lambda: messagebox.showerror("Meta-Learning error", error_msg),
-                )
+                self.after(0, lambda: self.meta_status_var.set(f"✗ Error: {exc}"))
+                self.after(0, lambda: messagebox.showerror("CDI", f"Error during meta-learning:\n{exc}"))
             finally:
-                self.after(
-                    0,
-                    lambda: (
-                        self.run_button.config(state=tk.NORMAL),
-                        self.status_var.set("Ready."),
-                    ),
-                )
-
-        self._worker_thread = threading.Thread(target=worker, daemon=True)
+                self.after(0, lambda: self.meta_run_button.config(state=tk.NORMAL))
+        
+        self._worker_thread = threading.Thread(target=run_meta_learning, daemon=True)
         self._worker_thread.start()
 
-    def _run_meta_learning(
-        self,
-        phases: int,
-        games_per_phase: int,
-        episodes_per_game: int,
-        consolidation_freq: int,
-        compression: float,
-        out_base: str,
-    ) -> None:
-        from pathlib import Path
-        from meta_learning_loop import MetaLearningLoop, TrainingConfig
+    def _append_meta_log(self, text: str) -> None:
+        self.meta_log_text.insert(tk.END, text + "\n")
+        self.meta_log_text.see(tk.END)
+    
+    # Inference Tab Handlers ----------------------------------------------
+    def _on_policy_toggle(self) -> None:
+        # Ensure only one policy is selected
+        if self.use_learned_policy_var.get():
+            self.use_baseline_policy_var.set(False)
+        elif self.use_baseline_policy_var.get():
+            self.use_learned_policy_var.set(False)
+        else:
+            # At least one must be selected
+            self.use_learned_policy_var.set(True)
+    
+    def _on_preset_selected(self, event=None) -> None:
+        preset = self.preset_var.get()
+        if preset == "Small demo (fast)":
+            self.max_steps_var.set("50")
+            self.epsilon_var.set("1e-3")
+        elif preset == "Medium":
+            self.max_steps_var.set("200")
+            self.epsilon_var.set("1e-4")
+        elif preset == "Large":
+            self.max_steps_var.set("1000")
+            self.epsilon_var.set("1e-5")
+    
+    def _generate_semiprime(self) -> None:
+        try:
+            import random
+            from utils.primes import is_prime, generate_prime
+            
+            p_low = int(self.p_low_var.get())
+            p_high = int(self.p_high_var.get())
+            q_low = int(self.q_low_var.get())
+            q_high = int(self.q_high_var.get())
+            
+            # Generate two primes
+            p = random.randint(p_low, p_high)
+            while not is_prime(p):
+                p = random.randint(p_low, p_high)
+            
+            q = random.randint(q_low, q_high)
+            while not is_prime(q):
+                q = random.randint(q_low, q_high)
+            
+            if not self.gen_allow_equal_var.get() and p == q:
+                # Try again for q
+                q = random.randint(q_low, q_high)
+                while not is_prime(q) or q == p:
+                    q = random.randint(q_low, q_high)
+            
+            n = p * q
+            self.target_n_var.set(str(n))
+            self._append_inference_log(f"Generated: N = {p} × {q} = {n}")
+            
+        except Exception as e:
+            messagebox.showerror("CDI", f"Error generating semiprime:\n{e}")
+    
+    def _on_inference_clicked(self) -> None:
+        if self._worker_thread and self._worker_thread.is_alive():
+            messagebox.showinfo("CDI", "An inference run is already in progress.")
+            return
         
-        # Create training configuration
-        config = TrainingConfig(
-            initial_games=games_per_phase * phases,
-            episodes_per_game=episodes_per_game,
-            consolidation_frequency=consolidation_freq,
-            target_compression=compression,
-            output_dir=Path(out_base)
-        )
+        # Validate Target N
+        try:
+            n_str = self.target_n_var.get().strip()
+            if not n_str:
+                raise ValueError("Please enter a target N")
+            target_n = int(n_str)
+            if target_n < 2:
+                raise ValueError("Target N must be >= 2")
+        except ValueError as e:
+            messagebox.showerror("CDI", f"Invalid target N: {e}")
+            return
         
-        # Initialize meta-learning loop
-        loop = MetaLearningLoop(config)
+        # Clear log
+        self.inference_log_text.delete(1.0, tk.END)
         
-        # Progress callback
-        def progress_callback(current, total, message):
-            self.after(0, lambda: self._update_progress(current, total, message))
-        
-        # Run meta-learning
-        self._append_log("Starting meta-learning loop...")
-        summary = loop.run(total_phases=phases, progress_callback=progress_callback)
-        
-        # Display results
-        self._append_log("\n=== Training Complete ===")
-        self._append_log(f"Total duration: {summary['run_duration_seconds']:.1f}s")
-        self._append_log(f"Total episodes: {summary['total_episodes']}")
-        self._append_log(f"Unique games seen: {summary['unique_games']}")
-        self._append_log(f"Consolidations: {summary['consolidations_performed']}")
-        self._append_log(f"\nSkills learned: {summary['skill_memory_stats'].get('total_skills', 0)}")
-        self._append_log(f"Avg skill importance: {summary['skill_memory_stats'].get('avg_importance', 0):.3f}")
-        
-        # Save state
-        run_dir = config.output_dir / f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        loop.save_state(run_dir)
-        self._last_run_dir = run_dir
-        
-        self._append_log(f"\nResults saved to: {run_dir}")
-        self.after(0, lambda: self.status_var.set("Complete!"))
-
-    def _update_progress(self, current: int, total: int, message: str):
-        """Update progress bar and status from worker thread."""
-        if total > 0:
-            self.progress["value"] = current
-            self.progress["maximum"] = total
-        self.status_var.set(message)
-        self._append_log(f"[{current}/{total}] {message}")
-
-    def _run_prime_ice(
-        self,
-        strategy_label: str,
-        train_low: int,
-        train_high: int,
-        episodes: int,
-        test_ranges: List[str],
-        out_base: str,
-    ) -> None:
-        import secrets
-
-        # Map human-readable label to internal strategy ID and name.
-        strategy_map = {
-            "Factor Cleanup (Deterministic)": "heuristic_sieve",
-            "Learning Factor Cleanup (Persistent)": "learning_sieve",
-            "Random Factor Checks (Baseline)": "random_rules",
-            "First-Cut Filter + Factor Cleanup (Fixed)": "fixed_filter_then_cleanup",
-            "First-Cut Filter + Factor Cleanup (Learning)": "learning_filter_then_cleanup",
-        }
-        requested_id = strategy_map.get(strategy_label, "learning_sieve")
-        strategy_id, strategy_name = get_agent_metadata(requested_id)
-
-        seed = secrets.randbits(32)
-        rng = RandomSource(seed=seed)
-        env = PrimeIceEnv(PrimeIceConfig(low=train_low, high=train_high))
-        agent = get_agent(
-            agent_id=strategy_id,
-            rng=rng,
-            train_high=train_high,
-            reset_policy=self.reset_policy_var.get(),
-        )
-
-        base_path = ensure_dir(out_base)
-        run_dir = make_run_dir(base_path)
-
+        # Build config
         config = {
-            "agent_id": strategy_id,
-            "agent_name": strategy_name,
-            "strategy": strategy_id,
-            "episodes": episodes,
-            "seed": seed,
-            "train_low": train_low,
-            "train_high": train_high,
-            "test_ranges": test_ranges,
-            "version": __version__,
-            "reset_policy": self.reset_policy_var.get(),
+            "target_n": target_n,
+            "assumptions": {
+                "is_odd": self.assume_odd_var.get(),
+                "is_semiprime": self.assume_semiprime_var.get(),
+                "allow_square": self.allow_square_var.get()
+            },
+            "policy": "learned" if self.use_learned_policy_var.get() else "baseline",
+            "limits": {
+                "max_steps": int(self.max_steps_var.get()),
+                "epsilon": float(self.epsilon_var.get()),
+                "display_precision": int(self.display_precision_var.get())
+            },
+            "options": {
+                "show_debug": self.show_debug_var.get(),
+                "allow_update_policy": self.allow_update_policy_var.get()
+            }
         }
-        dump_json(run_dir / "config.json", config)
-
-        def progress_cb(ep_idx: int, log_entry: Dict[str, object]) -> None:
-            """Update GUI with per-episode progress."""
-
-            def ui_update() -> None:
-                self.progress["value"] = ep_idx + 1
-                steps = log_entry.get("steps")
-                final_info = log_entry.get("final_info", {})
-                score = final_info.get("score")
-                self.status_var.set(
-                    f"Running... episode {ep_idx + 1}/{episodes}, "
-                    f"steps={steps}, score={score}"
-                )
-                self._append_log(
-                    f"Episode {ep_idx + 1}: steps={steps}, "
-                    f"primes_removed={final_info.get('primes_removed')}, "
-                    f"composites_remaining={final_info.get('remaining_composites')}, "
-                    f"score={score}"
-                )
-
-            self.after(0, ui_update)
-
-        # Run the entire pipeline in try/except/finally to ensure summary always written
-        train_result: Optional[Dict[str, object]] = None
-        rules_report: Optional[Dict[str, object]] = None
-        champion_program: Optional[Dict[str, object]] = None
-        battery_report: Optional[Dict[str, object]] = None
-        eval_report: Optional[Dict[str, object]] = None
-        err: Optional[BaseException] = None
+        
+        # Run in background thread
+        self.inference_run_button.config(state=tk.DISABLED)
+        self.inference_status_var.set("Inference in progress...")
+        self.inference_progress["value"] = 0
+        
+        def run_inference():
+            try:
+                self._append_inference_log(f"Starting inference on N = {target_n}...")
+                self._run_inference(config)
+                self.after(0, lambda: self.inference_status_var.set("✓ Inference complete!"))
+                self.after(0, lambda: self._switch_to_results_tab())
+            except Exception as exc:
+                self.after(0, lambda: self.inference_status_var.set(f"✗ Error: {exc}"))
+                self.after(0, lambda: messagebox.showerror("CDI", f"Error during inference:\n{exc}"))
+            finally:
+                self.after(0, lambda: self.inference_run_button.config(state=tk.NORMAL))
+        
+        self._worker_thread = threading.Thread(target=run_inference, daemon=True)
+        self._worker_thread.start()
+    
+    def _append_inference_log(self, text: str) -> None:
+        self.inference_log_text.insert(tk.END, text + "\n")
+        self.inference_log_text.see(tk.END)
+    
+    # Results Tab Handlers ------------------------------------------------
+    def _switch_to_results_tab(self) -> None:
+        self.notebook.select(self.tab_results)
+        self._reload_latest_results()
+    
+    def _reload_latest_results(self) -> None:
+        if not self._last_run_dir:
+            self.results_header_text.set("No results available yet.")
+            return
         
         try:
-            # Training
-            train_logs = run_episodes(agent, env, episodes, progress_cb=progress_cb)
-            dump_jsonl(run_dir / "train_log.jsonl", train_logs)
-
-            # Build program records from training episodes
-            program_records: List[ProgramRecord] = []
-            for idx, ep in enumerate(train_logs):
-                ep_summary: EpisodeSummary = ep.get("episode_summary")  # type: ignore
-                rules_for_ep: List[Dict[str, object]] = ep.get("rules", [])
-                
-                train_metrics = {
-                    "steps": ep_summary.steps,
-                    "total_primes": ep_summary.total_primes,
-                    "primes_preserved": ep_summary.primes_remaining_count,
-                    "primes_removed_count": ep_summary.primes_removed_count,
-                    "primes_removed_list": list(ep_summary.primes_removed_list),
-                    "composites_remaining_count": ep_summary.composites_remaining_count,
-                    "total_composites": ep_summary.total_composites,
-                    "score": ep_summary.score,
-                }
-                
-                rec = ProgramRecord(
-                    program_name=f"episode_{idx}",
-                    source="training",
-                    rules=[step["rule"] for step in rules_for_ep],  # Extract just the rule dict
-                    train_metrics=train_metrics,
-                    battery_pass=False,
-                    battery_summary={},
-                )
-                program_records.append(rec)
-
-            # Select champion
-            if program_records:
-                champion_rec = choose_champion_program(program_records)
-                canon_champion = canonicalize_program(champion_rec.rules)
-
-                # Evaluate champion on battery
-                champion_rec.battery_summary = evaluate_program_on_battery(canon_champion.rules_canonical)
-                champion_rec.battery_pass = bool(champion_rec.battery_summary.get("battery_pass", False))
-                battery_report = champion_rec.battery_summary
-                write_battery_report(
-                    run_dir / "battery_report.json",
-                    run_dir / "battery_report.txt",
-                    champion_rec.battery_summary,
-                )
-
-                # Replay champion on training range to get preserved primes list
-                replay_env = PrimeIceEnv(PrimeIceConfig(low=train_low, high=train_high))
-                replay_env.reset()
-                steps_replay = 0
-                done = False
-                for rdict in canon_champion.rules_canonical:
-                    if done:
-                        break
-                    rule = rule_from_dict(rdict)
-                    _, _, done, _ = replay_env.step(rule)
-                    steps_replay += 1
-                replay_summary = replay_env.episode_summary(steps_replay)
-                primes_preserved_list = sorted(
-                    n for n in replay_env.remaining_numbers if replay_env._is_prime.get(n, False)
-                )
-
-                replay_metrics: Dict[str, object] = {
-                    "steps": replay_summary.steps,
-                    "total_primes": replay_summary.total_primes,
-                    "primes_preserved": replay_summary.primes_remaining_count,
-                    "primes_removed_count": replay_summary.primes_removed_count,
-                    "primes_removed_list": list(replay_summary.primes_removed_list),
-                    "total_composites": replay_summary.total_composites,
-                    "composites_remaining_count": replay_summary.composites_remaining_count,
-                    "score": replay_summary.score,
-                }
-
-                champion_program = {
-                    "program_name": champion_rec.program_name,
-                    "source": champion_rec.source,
-                    "rules": canon_champion.rules_canonical,
-                    "train_metrics": champion_rec.train_metrics,
-                    "final_metrics": champion_rec.train_metrics,
-                    "replay_metrics": replay_metrics,
-                    "primes_preserved_list": primes_preserved_list,
-                    "battery_pass": champion_rec.battery_pass,
-                    "battery_summary": champion_rec.battery_summary,
-                    "signature_ordered": canon_champion.signature_ordered,
-                    "signature_unordered": canon_champion.signature_unordered,
-                    "signature_stagewise": canon_champion.signature_stagewise,
-                }
-                dump_json(run_dir / "champion_program.json", champion_program)
-
-                train_result = {
-                    "best_episode": {
-                        "summary": champion_rec.train_metrics,
-                        "rules": champion_rec.rules,
-                    }
-                }
-
-            # Evaluation on test ranges
-            if not test_ranges:
-                default_ranges = [
-                    f"{train_low}:{train_high}",
-                    f"{train_low}:{train_high * 10}",
-                ]
-                ranges = [parse_range(r) for r in default_ranges]
-            else:
-                ranges = [parse_range(r) for r in test_ranges]
-            eval_report = evaluate_on_ranges(agent, ranges, episodes=1, seed=seed)
-            dump_json(run_dir / "eval_report.json", eval_report)
-
-            # Learning policy snapshot if applicable
-            learning_policy: Dict[str, object] | None = None
-            if isinstance(agent, LearningSieveAgent):
-                agent.on_run_end()
-                learning_policy = agent.export_policy()
-                dump_json(run_dir / "policy_snapshot.json", learning_policy)
-
-            # Rules report
-            rules_report = _write_rules_report(run_dir / "rules_report.txt", train_logs, learning_policy)
-
-        except BaseException as e:
-            err = e
-        finally:
-            # Always write summary.txt using unified reporting
-            summary_text = build_summary_text(
-                run_dir=run_dir,
-                config=config,
-                train_result=train_result,
-                rules_report=rules_report,
-                champion_program=champion_program,
-                battery_report=battery_report,
-                eval_report=eval_report,
-                error=err,
-            )
-            dump_text(run_dir / "summary.txt", summary_text)
-
-            self._last_run_dir = run_dir
-
-            # Update GUI log with summary.txt content
-            def update_log() -> None:
-                self.log_text.delete("1.0", tk.END)
-                summary_path = run_dir / "summary.txt"
-                if summary_path.exists():
-                    with open(summary_path, "r", encoding="utf-8") as f:
-                        content = f.read()
-                        self._append_log(content)
-                else:
-                    self._append_log(f"ERROR: summary.txt not found in {run_dir}")
-                    self._append_log("This should never happen - please report this bug.")
-                
-                # Auto-open results viewer for this run.
-                self._open_results_window(run_dir)
-
-            self.after(0, update_log)
+            # Load summary.txt
+            summary_file = self._last_run_dir / "summary.txt"
+            if summary_file.exists():
+                with open(summary_file, "r") as f:
+                    summary_text = f.read()
+                self.results_summary_text.delete(1.0, tk.END)
+                self.results_summary_text.insert(1.0, summary_text)
             
-            if err is not None:
-                def show_error() -> None:
-                    messagebox.showerror("Prime Ice Error", f"Run failed: {type(err).__name__}: {str(err)}")
-                self.after(0, show_error)
+            # Load belief state if available
+            belief_file = self._last_run_dir / "belief_final.json"
+            if belief_file.exists():
+                import json
+                with open(belief_file, "r") as f:
+                    belief_data = json.load(f)
+                
+                belief_display = "Belief State:\n" + "="*60 + "\n"
+                belief_display += json.dumps(belief_data, indent=2)
+                
+                self.belief_text.delete(1.0, tk.END)
+                self.belief_text.insert(1.0, belief_display)
+            
+            # Update header
+            self.results_header_text.set(f"Results from: {self._last_run_dir.name}")
+            
+            # Generate cautious explanation
+            self._generate_explanation()
+            
+        except Exception as e:
+            messagebox.showerror("CDI", f"Error loading results:\n{e}")
+    
+    def _generate_explanation(self) -> None:
+        self.explanation_text.delete(1.0, tk.END)
+        self.explanation_text.insert(1.0, 
+            "This shows the system's belief state after inference/learning. "
+            "Higher confidence values suggest the system has converged on constraints. "
+            "This is NOT a guarantee of correctness—always verify independently.")
+    
+    def _copy_results_summary(self) -> None:
+        summary = self.results_summary_text.get(1.0, tk.END)
+        self.clipboard_clear()
+        self.clipboard_append(summary)
+        messagebox.showinfo("CDI", "Summary copied to clipboard.")
+    
+    def _open_run_folder(self) -> None:
+        """Open the last run folder in the system file explorer."""
+        if not self._last_run_dir:
+            messagebox.showinfo("CDI", "No run has been completed yet.")
+            return
+        try:
+            import os
+            os.startfile(str(self._last_run_dir))  # type: ignore[attr-defined]
+        except Exception as exc:
+            messagebox.showerror("CDI", f"Could not open folder:\n{exc}")
 
-
-class ResultViewerWindow(tk.Toplevel):
-    """Separate window for viewing and exporting run results."""
-
-    def __init__(self, master: PrimeIceApp, initial_run_dir: Optional[Path] = None) -> None:
-        super().__init__(master)
-        self.master_app = master
-        self.title("Prime Ice – Results Viewer")
-        self.geometry("900x600")
-
-        self.run_select_var = tk.StringVar()
-        self._build_widgets()
-        self.refresh_runs()
-
-        if initial_run_dir is not None:
-            self.load_run(initial_run_dir)
-        elif self.run_select_var.get():
-            # Load latest run by default.
-            self._load_selected_run()
-
-    def _build_widgets(self) -> None:
-        main = ttk.Frame(self)
-        main.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        top_row = ttk.Frame(main)
-        top_row.pack(fill=tk.X, pady=2)
-
-        ttk.Label(top_row, text="Select run:").pack(side=tk.LEFT)
-        self.run_select_combo = ttk.Combobox(
-            top_row, textvariable=self.run_select_var, width=50, state="readonly"
+    # MAIN RUN METHODS ====================================================
+    
+    def _run_meta_learning(self, config: dict) -> None:
+        """Execute a meta-learning run."""
+        from meta_learning_loop import MetaLearningLoop
+        import json
+        from datetime import datetime
+        
+        # Create output directory
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_dir = Path(self.out_var.get()) / f"run_{timestamp}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        self._last_run_dir = run_dir
+        
+        # Save config
+        config_file = run_dir / "config.json"
+        with open(config_file, "w") as f:
+            json.dump(config, f, indent=2)
+        
+        self._append_meta_log(f"Created run directory: {run_dir}")
+        
+        # Initialize and run
+        loop = MetaLearningLoop(
+            n_games=config["n_games"],
+            acquisition_rounds=config["acq_rounds"],
+            consolidation_budget=config["cons_budget"],
+            test_games=config["test_games"],
+            run_dir=run_dir
         )
-        self.run_select_combo.pack(side=tk.LEFT, padx=5)
-
-        ttk.Button(top_row, text="Refresh", command=self.refresh_runs).pack(
-            side=tk.LEFT, padx=2
-        )
-        ttk.Button(top_row, text="Load", command=self._load_selected_run).pack(
-            side=tk.LEFT, padx=2
-        )
-        ttk.Button(
-            top_row,
-            text="Export primes.txt",
-            command=self._export_primes_for_run,
-        ).pack(side=tk.LEFT, padx=2)
-        ttk.Button(
-            top_row,
-            text="Prepare AI prompt",
-            command=self._prepare_ai_prompt_for_run,
-        ).pack(side=tk.LEFT, padx=2)
-
-        self.results_text = tk.Text(main, wrap=tk.WORD, height=30)
-        self.results_text.pack(fill=tk.BOTH, expand=True)
-
-    def _append_results(self, text: str) -> None:
-        self.results_text.insert(tk.END, text + "\n")
-        self.results_text.see(tk.END)
-
-    def refresh_runs(self) -> None:
-        base = Path(self.master_app.out_var.get())
-        if not base.exists():
-            self.run_select_combo["values"] = []
-            self.run_select_var.set("")
-            return
-        runs = sorted(
-            (p for p in base.iterdir() if p.is_dir() and p.name.startswith("run_")),
-            key=lambda p: p.name,
-        )
-        run_paths = [str(p) for p in runs]
-        self.run_select_combo["values"] = run_paths
-        if run_paths:
-            self.run_select_var.set(run_paths[-1])
-        else:
-            self.run_select_var.set("")
-
-    def load_run(self, run_dir: Path) -> None:
-        self.refresh_runs()
-        self.run_select_var.set(str(run_dir))
-        self._load_selected_run()
-
-    def _load_selected_run(self) -> None:
-        run_path = self.run_select_var.get()
-        if not run_path:
-            messagebox.showinfo("Prime Ice", "No run selected.")
-            return
-        run_dir = Path(run_path)
-        cfg_path = run_dir / "config.json"
-        summary_path = run_dir / "summary.txt"
-        eval_path = run_dir / "eval_report.json"
-        self.results_text.delete("1.0", tk.END)
-
-        config: Dict[str, object] = {}
-        if cfg_path.exists():
-            with open(cfg_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
-
-        self._append_results(f"Run directory: {run_dir}")
-        if config:
-            agent_name = config.get("agent_name") or ""
-            if not agent_name:
-                agent_id = str(config.get("agent_id") or config.get("strategy") or "learning_sieve")
-                _normalized_id, agent_name = get_agent_metadata(agent_id)
-            self._append_results(f"Strategy: {agent_name}")
-            self._append_results(
-                f"Train range: {config.get('train_low')}..{config.get('train_high')}"
-            )
-            self._append_results(f"Episodes: {config.get('episodes')}")
-            self._append_results("")
-
-        if summary_path.exists():
-            self._append_results("Summary.txt:")
-            with open(summary_path, "r", encoding="utf-8") as f:
-                self._append_results(f.read())
-
-        # Show champion and battery reports in the Patterns-style section if present.
-        champion_path = run_dir / "champion_program.txt"
-        if champion_path.exists():
-            self._append_results("\nChampion Program:")
-            with open(champion_path, "r", encoding="utf-8") as f:
-                self._append_results(f.read())
-        battery_path = run_dir / "battery_report.txt"
-        if battery_path.exists():
-            self._append_results("\nBattery Report:")
-            with open(battery_path, "r", encoding="utf-8") as f:
-                self._append_results(f.read())
-
-        if eval_path.exists():
-            self._append_results("\nEvaluation report (ranges and final scores):")
-            with open(eval_path, "r", encoding="utf-8") as f:
-                self._append_results(f.read())
-
-        # Simple pass/fail indication
-        if config and summary_path.exists():
-            last_line = ""
-            with open(summary_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    if line.strip():
-                        last_line = line
-            # Pass if zero primes removed and zero composites remaining.
-            primes_removed = None
-            composites_remaining = None
-            for line in open(summary_path, "r", encoding="utf-8"):
-                if line.startswith("Primes removed:"):
-                    primes_removed = int(line.split(":")[1].strip())
-                if line.startswith("Composites remaining:"):
-                    composites_remaining = int(line.split(":")[1].strip())
-            if primes_removed is not None and composites_remaining is not None:
-                status = "PASS" if primes_removed == 0 and composites_remaining == 0 else "FAIL"
-                self._append_results(f"\nOverall status: {status}")
-
-    def _export_primes_for_run(self) -> None:
-        run_path = self.run_select_var.get()
-        if not run_path:
-            messagebox.showinfo("Prime Ice", "No run selected.")
-            return
-        run_dir = Path(run_path)
-        cfg_path = run_dir / "config.json"
-        champion_prog_path = run_dir / "champion_program.json"
-        if not cfg_path.exists():
-            messagebox.showerror(
-                "Prime Ice",
-                "config.json not found in the selected run.",
-            )
-            return
-        if not champion_prog_path.exists():
-            messagebox.showerror(
-                "Prime Ice",
-                "champion_program.json not found; run training first.",
-            )
-            return
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
-        with open(champion_prog_path, "r", encoding="utf-8") as f:
-            champion_prog = json.load(f)
-        rules = champion_prog.get("rules", [])
-
-        env = PrimeIceEnv(
-            PrimeIceConfig(low=config["train_low"], high=config["train_high"])
-        )
-        env.reset()
-        for rule_dict in rules:
-            rule = rule_from_dict(rule_dict)
-            _, _, done, _ = env.step(rule)
-            if done:
-                break
-
-        remaining = sorted(env._remaining)  # type: ignore[attr-defined]
-        primes_found = [n for n in remaining if env._is_prime.get(n, False)]  # type: ignore[attr-defined]
-
-        out_path = run_dir / "primes_found.txt"
-        dump_text(out_path, "\n".join(str(n) for n in primes_found))
-        self.results_text.delete("1.0", tk.END)
-        self._append_results(f"Exported {len(primes_found)} primes to {out_path}")
-        if primes_found:
-            sample_preview = ", ".join(str(n) for n in primes_found[:50])
-            self._append_results(f"First primes: {sample_preview}")
-
-    def _prepare_ai_prompt_for_run(self) -> None:
-        run_path = self.run_select_var.get()
-        if not run_path:
-            messagebox.showinfo("Prime Ice", "No run selected.")
-            return
-        run_dir = Path(run_path)
-        cfg_path = run_dir / "config.json"
-        if not cfg_path.exists():
-            messagebox.showerror("Prime Ice", "config.json not found for this run.")
-            return
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
-
-        prompt_lines = [
-            "You are an AI assistant helping analyze a Prime Ice run.",
-            "",
-            "Prime Ice is a rule-discovery game where an agent removes composite-number blocks",
-            "while trying to keep all prime-number blocks. The environment knows which numbers",
-            "are prime (for scoring) but the agent itself only sees aggregate observations and",
-            "learns from penalties.",
-            "",
-            f"Run directory: {run_dir}",
-            "Key files:",
-            "- config.json: configuration of this run (ranges, agent, episodes, seed).",
-            "- train_log.jsonl: JSONL with one line per episode, including the rules used.",
-            "- eval_report.json: evaluation metrics on held-out ranges.",
-            "- summary.txt: human-readable final summary.",
-            "- primes_found.txt (if present): primes remaining after the last episode.",
-            "",
-            "Config for this run:",
-            json.dumps(config, indent=2),
-            "",
-            "Tasks:",
-            "1) Check whether the learned/applied rules are safely preserving primes and removing composites.",
-            "2) Look for patterns in the rules that generalize well across evaluation ranges.",
-            "3) Suggest improvements to the rule set, learning parameters, or observation features",
-            "   to reduce steps while still never removing primes.",
-            "4) If you see repeated mistakes (e.g., losing primes or leaving many composites),",
-            "   point out which rules are responsible and how they might be refined.",
-            "",
-            "You may ask to inspect specific files from this run and then propose concrete",
-            "code or configuration changes.",
-        ]
-        prompt_text = "\n".join(prompt_lines)
-        out_path = run_dir / "ai_prompt.txt"
-        dump_text(out_path, prompt_text)
-
-        self.results_text.delete("1.0", tk.END)
-        self._append_results("Prepared AI analysis prompt for this run:")
-        self._append_results("")
-        self._append_results(prompt_text)
-        self._append_results("")
-        self._append_results(f"(Saved to {out_path})")
+        
+        # Run with progress callbacks
+        def progress_callback(phase: str, pct: float):
+            self.after(0, lambda: self.meta_progress.configure(value=pct))
+            self.after(0, lambda: self._append_meta_log(f"[{phase}] {pct:.0f}%"))
+        
+        loop.run(progress_callback=progress_callback)
+        
+        # Write summary
+        summary_file = run_dir / "summary.txt"
+        with open(summary_file, "w") as f:
+            f.write(f"Meta-Learning Run Summary\n")
+            f.write(f"{'='*60}\n")
+            f.write(f"Timestamp: {timestamp}\n")
+            f.write(f"Games trained: {config['n_games']}\n")
+            f.write(f"Acquisition rounds: {config['acq_rounds']}\n")
+            f.write(f"Consolidation budget: {config['cons_budget']}\n")
+            f.write(f"Test games: {config['test_games']}\n")
+            f.write(f"{'='*60}\n")
+            f.write(f"Run completed successfully.\n")
+        
+        self._append_meta_log(f"✓ Run complete. Summary saved to {summary_file}")
+    
+    def _run_inference(self, config: dict) -> None:
+        """Execute an inference run on a specific target N."""
+        import json
+        from datetime import datetime
+        
+        # Create output directory
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_dir = Path(self.out_var.get()) / f"inference_{timestamp}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        self._last_run_dir = run_dir
+        
+        # Save config
+        config_file = run_dir / "config.json"
+        with open(config_file, "w") as f:
+            json.dump(config, f, indent=2)
+        
+        self._append_inference_log(f"Created run directory: {run_dir}")
+        
+        # TODO: Implement actual inference logic here
+        # This is a placeholder that demonstrates the structure
+        target_n = config["target_n"]
+        max_steps = config["limits"]["max_steps"]
+        
+        self._append_inference_log(f"Running inference on N = {target_n}")
+        self._append_inference_log(f"Max steps: {max_steps}")
+        self._append_inference_log(f"Policy: {config['policy']}")
+        
+        # Simulate some progress
+        import time
+        for i in range(10):
+            time.sleep(0.2)
+            pct = (i + 1) * 10
+            self.after(0, lambda p=pct: self.inference_progress.configure(value=p))
+            self.after(0, lambda p=pct: self._append_inference_log(f"Progress: {p}%"))
+        
+        # Write mock results
+        summary_file = run_dir / "summary.txt"
+        with open(summary_file, "w") as f:
+            f.write(f"Inference Run Summary\n")
+            f.write(f"{'='*60}\n")
+            f.write(f"Timestamp: {timestamp}\n")
+            f.write(f"Target N: {target_n}\n")
+            f.write(f"Policy: {config['policy']}\n")
+            f.write(f"Max steps: {max_steps}\n")
+            f.write(f"{'='*60}\n")
+            f.write(f"Inference completed.\n")
+            f.write(f"(Full inference implementation pending)\n")
+        
+        # Write mock belief state
+        belief_file = run_dir / "belief_final.json"
+        with open(belief_file, "w") as f:
+            json.dump({
+                "target_n": target_n,
+                "steps": 100,
+                "entropy": 0.123,
+                "confidence": 0.85,
+                "note": "Mock data - full implementation pending"
+            }, f, indent=2)
+        
+        self._append_inference_log(f"✓ Inference complete. Results saved to {run_dir}")
 
 
-def launch_gui() -> None:
+def main() -> None:
+    """Launch the CDI GUI."""
     app = GameLearningApp()
-    app.title("Self-Improving Game-Learning AI — Meta-Learning with Forgetting")
-    try:
-        icon_path = Path(__file__).resolve().parent / "assets" / "brain.ico"
-        if icon_path.exists():
-            app.iconbitmap(str(icon_path))
-    except Exception:
-        pass
     app.mainloop()
+
+
+if __name__ == "__main__":
+    main()
