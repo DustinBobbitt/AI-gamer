@@ -1,0 +1,10 @@
+{
+  "factors_found": true,
+  "p": 1,
+  "q": 15,
+  "window_width": 1,
+  "checks_attempted": 1,
+  "time_ms": 0.03909999941242859,
+  "verifier_skipped": false,
+  "skip_reason": null
+}

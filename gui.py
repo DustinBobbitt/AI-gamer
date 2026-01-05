@@ -724,7 +724,8 @@ class GameLearningApp(tk.Tk):
                 belief_display += f"Entropy: {summary.format_entropy_change()}\n"
                 belief_display += f"Confidence: {summary.confidence:.3f}\n" if summary.confidence else "Confidence: n/a\n"
                 belief_display += f"Near-square score: {summary.near_square_score:.3f} ({summary.get_near_square_label()})\n"
-                belief_display += f"Size window: {summary.format_size_window()}\n"
+                belief_display += f"Estimated smaller factor magnitude:\n"
+                belief_display += f"{summary.format_size_window(summary.target_n)}\n"
                 belief_display += f"Top residues (mod 30): {summary.format_residues()}\n\n"
                 
                 belief_display += "INTERPRETATION\n"
@@ -749,6 +750,8 @@ class GameLearningApp(tk.Tk):
                         if verification.factors_found:
                             belief_display += f"p = {verification.p}\n"
                             belief_display += f"q = {verification.q}\n"
+                        elif not verification.factors_found and verification.failure_reason:
+                            belief_display += f"Reason: {verification.failure_reason}\n"
                         belief_display += f"Window width: {verification.window_width}\n"
                         belief_display += f"Checks attempted: {verification.checks_attempted}\n"
                         belief_display += f"Time: {verification.time_ms:.2f} ms\n\n"
@@ -1067,7 +1070,7 @@ class GameLearningApp(tk.Tk):
         self.summary_vars["Entropy:"].set(summary.format_entropy_change())
         self.summary_vars["Confidence:"].set(f"{summary.confidence:.3f}" if summary.confidence is not None else "n/a")
         self.summary_vars["Near-square score:"].set(f"{summary.near_square_score:.3f} ({summary.get_near_square_label()})")
-        self.summary_vars["Size window (smaller factor):"].set(summary.format_size_window())
+        self.summary_vars["Size window (smaller factor):"].set(summary.format_size_window(summary.target_n))
         self.summary_vars["Residue preferences (mod 30):"].set(summary.format_residues())
         
         # Update interpretation text

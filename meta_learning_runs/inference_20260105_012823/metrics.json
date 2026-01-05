@@ -1,0 +1,22 @@
+{
+  "entropy_series": [
+    2.0794415408798357,
+    2.0794415408798357,
+    2.0794415408798357,
+    2.0794415408798357,
+    2.0794415408798357
+  ],
+  "reward_series": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "transform_sequence": [
+    "SmoothnessHeuristicUpdate({})",
+    "SmoothnessHeuristicUpdate({})",
+    "NearSquareUpdate({})",
+    "NearSquareUpdate({})"
+  ],
+  "termination_reason": "entropy_converged"
+}

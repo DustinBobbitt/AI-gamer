@@ -102,6 +102,14 @@ def verify_factors_from_belief(
             if N % candidate == 0:
                 p = candidate
                 q = N // candidate
+                
+                # Verify both factors are >= 2 and prime (reject trivial factorizations)
+                from utils.primes import is_prime
+                if p < 2 or q < 2:
+                    continue  # Skip trivial factorization
+                if not is_prime(p) or not is_prime(q):
+                    continue  # Skip non-prime factors
+                
                 elapsed_ms = (time.perf_counter() - start_time) * 1000
                 return VerificationResult(
                     factors_found=True,
@@ -125,6 +133,14 @@ def verify_factors_from_belief(
         if N % candidate == 0:
             p = candidate
             q = N // candidate
+            
+            # Verify both factors are >= 2 and prime (reject trivial factorizations)
+            from utils.primes import is_prime
+            if p < 2 or q < 2:
+                continue  # Skip trivial factorization
+            if not is_prime(p) or not is_prime(q):
+                continue  # Skip non-prime factors
+            
             elapsed_ms = (time.perf_counter() - start_time) * 1000
             return VerificationResult(
                 factors_found=True,
@@ -135,13 +151,21 @@ def verify_factors_from_belief(
                 time_ms=elapsed_ms
             )
     
-    # No factors found
+    # No valid prime factors found
     elapsed_ms = (time.perf_counter() - start_time) * 1000
+    
+    # Determine failure reason
+    if window_width < 10:
+        failure_reason = "only trivial factorization (1 × N) possible under inferred window"
+    else:
+        failure_reason = "inferred window produced no valid prime factors"
+    
     return VerificationResult(
         factors_found=False,
         window_width=window_width,
         checks_attempted=checks_attempted,
-        time_ms=elapsed_ms
+        time_ms=elapsed_ms,
+        failure_reason=failure_reason
     )
 
 

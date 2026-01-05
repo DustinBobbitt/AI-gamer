@@ -73,11 +73,23 @@ class InferenceSummary:
         pct_str = f"{self.entropy_pct_reduction:.1f}%" if self.entropy_pct_reduction is not None else "0.0%"
         return f"{self.entropy_start:.3f} → {self.entropy_end:.3f} (Δ{delta_str}, {pct_str})"
     
-    def format_size_window(self) -> str:
-        """Format size window as readable string."""
+    def format_size_window(self, target_n: Optional[int] = None) -> str:
+        """Format size window as readable string with clear labeling."""
         if self.size_window_low is None or self.size_window_high is None:
             return "n/a"
-        return f"[{self.size_window_low:.2e}, {self.size_window_high:.2e}]"
+        
+        # Format absolute range
+        result = f"~ [{self.size_window_low:.1f}, {self.size_window_high:.1f}]"
+        
+        # Add relative to sqrt(N) if target_n provided
+        if target_n is not None and target_n > 0:
+            import math
+            sqrt_n = math.sqrt(target_n)
+            low_ratio = self.size_window_low / sqrt_n
+            high_ratio = self.size_window_high / sqrt_n
+            result += f" (≈ {low_ratio:.2f}–{high_ratio:.2f} × sqrt(N))"
+        
+        return result
     
     def format_residues(self) -> str:
         """Format top residues as readable string."""
@@ -104,6 +116,7 @@ class VerificationResult:
     # Status
     verifier_skipped: bool = False
     skip_reason: Optional[str] = None
+    failure_reason: Optional[str] = None  # Why verification failed (e.g., "only trivial factorization")
     
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary."""
@@ -152,6 +165,7 @@ def generate_interpretation(summary: InferenceSummary) -> List[str]:
     Returns:
         List of 1-3 interpretation lines (cautious language).
     """
+    SMALL_N_THRESHOLD = 8  # bit_length threshold for small-N behavior
     lines = []
     
     # Entropy interpretation (check for None to avoid comparison errors)
@@ -164,6 +178,11 @@ def generate_interpretation(summary: InferenceSummary) -> List[str]:
             lines.append("Inference made minimal progress (< 20% entropy reduction).")
     else:
         lines.append("Entropy reduction data not available.")
+    
+    # Small-N hygiene: explain expected behavior for very small N
+    if summary.bit_length is not None and summary.bit_length <= SMALL_N_THRESHOLD:
+        if summary.entropy_pct_reduction is not None and summary.entropy_pct_reduction < 5:
+            lines.append("N is very small; limited structural inference is expected at this scale.")
     
     # Near-square interpretation (check for None)
     if summary.near_square_score is not None:
@@ -178,7 +197,7 @@ def generate_interpretation(summary: InferenceSummary) -> List[str]:
         if summary.confidence > 0.8:
             lines.append(f"System expressed high confidence ({summary.confidence:.2f}) in belief state.")
         elif summary.confidence < 0.3:
-            lines.append(f"System expressed low confidence ({summary.confidence:.2f}), further constraints may help.")
+            lines.append(f"System expressed low confidence ({summary.confidence:.2f}).")
     
     return lines[:3]  # Max 3 lines
 
@@ -224,7 +243,8 @@ def write_summary_txt(summary: InferenceSummary, filepath: str,
         f.write("-" * 70 + "\n")
         f.write(f"Confidence: {summary.confidence if summary.confidence is not None else 'n/a'}\n")
         f.write(f"Near-square score: {summary.near_square_score:.3f} ({summary.get_near_square_label()})\n")
-        f.write(f"Size window: {summary.format_size_window()}\n")
+        f.write(f"Estimated smaller factor magnitude:\n")
+        f.write(f"{summary.format_size_window(summary.target_n)}\n")
         f.write(f"Top residues (mod 30): {summary.format_residues()}\n\n")
         
         # Interpretation
@@ -245,6 +265,8 @@ def write_summary_txt(summary: InferenceSummary, filepath: str,
                 if verification.factors_found and verification.p is not None:
                     f.write(f"p = {verification.p}\n")
                     f.write(f"q = {verification.q}\n")
+                elif not verification.factors_found and verification.failure_reason:
+                    f.write(f"Reason: {verification.failure_reason}\n")
                 f.write(f"Window width: {verification.window_width if verification.window_width else 'n/a'}\n")
                 f.write(f"Checks attempted: {verification.checks_attempted}\n")
                 f.write(f"Time: {verification.time_ms:.2f} ms\n\n")

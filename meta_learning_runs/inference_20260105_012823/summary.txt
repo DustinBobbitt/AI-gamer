@@ -1,0 +1,39 @@
+======================================================================
+ARITHMETIC FACTOR INFERENCE RUN SUMMARY
+======================================================================
+
+Target N: 15
+Bit length: 4
+
+Termination reason: entropy_converged
+Steps taken: 4
+
+ENTROPY METRICS
+----------------------------------------------------------------------
+Start: 2.0794
+End: 2.0794
+Delta: +0.0000
+Reduction: 0.00%
+
+BELIEF STATE
+----------------------------------------------------------------------
+Confidence: 0.0
+Near-square score: 0.333 (MED)
+Size window: [1.55e+00, 2.32e+00]
+Top residues (mod 30): 1:0.12, 7:0.12, 11:0.12
+
+INTERPRETATION
+----------------------------------------------------------------------
+• Inference made minimal progress (< 20% entropy reduction).
+• System expressed low confidence (0.00), further constraints may help.
+
+VERIFICATION RESULT
+----------------------------------------------------------------------
+Factors found: YES
+p = 1
+q = 15
+Window width: 1
+Checks attempted: 1
+Time: 0.04 ms
+
+======================================================================
