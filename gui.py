@@ -765,9 +765,9 @@ class GameLearningApp(tk.Tk):
                     self.belief_text.insert(1.0, belief_display)
                 else:
                     # Ultimate fallback to old belief_final.json if inference_summary.json not available
-                belief_file = self._last_run_dir / "belief_final.json"
-                if belief_file.exists():
-                    with open(belief_file, "r", encoding="utf-8") as f:
+                    belief_file = self._last_run_dir / "belief_final.json"
+                    if belief_file.exists():
+                        with open(belief_file, "r", encoding="utf-8") as f:
                         belief_data = json.load(f)
                     
                     belief_display = "Belief State:\n" + "="*60 + "\n"
