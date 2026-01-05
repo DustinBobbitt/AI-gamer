@@ -666,8 +666,11 @@ class GameLearningApp(tk.Tk):
                 self.after(0, lambda: self.inference_status_var.set("✓ Inference complete!"))
                 self.after(0, lambda: self._switch_to_results_tab())
             except Exception as exc:
-                self.after(0, lambda: self.inference_status_var.set(f"✗ Error: {exc}"))
-                self.after(0, lambda: messagebox.showerror("CDI", f"Error during inference:\n{exc}"))
+                error_msg = str(exc)
+                import traceback
+                full_trace = traceback.format_exc()
+                self.after(0, lambda msg=error_msg: self.inference_status_var.set(f"✗ Error: {msg}"))
+                self.after(0, lambda msg=error_msg, trace=full_trace: messagebox.showerror("CDI", f"Error during inference:\n{msg}\n\nFull trace:\n{trace}"))
             finally:
                 self.after(0, lambda: self.inference_run_button.config(state=tk.NORMAL))
         
