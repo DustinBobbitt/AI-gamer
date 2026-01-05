@@ -56,6 +56,8 @@ class InferenceSummary:
     
     def get_near_square_label(self) -> str:
         """Convert near_square_score to human label."""
+        if self.near_square_score is None:
+            return "UNKNOWN"
         if self.near_square_score < 0.3:
             return "LOW"
         elif self.near_square_score < 0.7:
@@ -65,7 +67,11 @@ class InferenceSummary:
     
     def format_entropy_change(self) -> str:
         """Format entropy change as readable string."""
-        return f"{self.entropy_start:.3f} → {self.entropy_end:.3f} (Δ{self.entropy_delta:+.3f}, {self.entropy_pct_reduction:.1f}%)"
+        if self.entropy_start is None or self.entropy_end is None:
+            return "n/a"
+        delta_str = f"{self.entropy_delta:+.3f}" if self.entropy_delta is not None else "+0.000"
+        pct_str = f"{self.entropy_pct_reduction:.1f}%" if self.entropy_pct_reduction is not None else "0.0%"
+        return f"{self.entropy_start:.3f} → {self.entropy_end:.3f} (Δ{delta_str}, {pct_str})"
     
     def format_size_window(self) -> str:
         """Format size window as readable string."""
@@ -148,20 +154,24 @@ def generate_interpretation(summary: InferenceSummary) -> List[str]:
     """
     lines = []
     
-    # Entropy interpretation
-    if summary.entropy_pct_reduction > 50:
-        lines.append("Inference significantly narrowed the search space (>50% entropy reduction).")
-    elif summary.entropy_pct_reduction > 20:
-        lines.append("Inference moderately narrowed the search space (20-50% entropy reduction).")
+    # Entropy interpretation (check for None to avoid comparison errors)
+    if summary.entropy_pct_reduction is not None:
+        if summary.entropy_pct_reduction > 50:
+            lines.append("Inference significantly narrowed the search space (>50% entropy reduction).")
+        elif summary.entropy_pct_reduction > 20:
+            lines.append("Inference moderately narrowed the search space (20-50% entropy reduction).")
+        else:
+            lines.append("Inference made minimal progress (< 20% entropy reduction).")
     else:
-        lines.append("Inference made minimal progress (< 20% entropy reduction).")
+        lines.append("Entropy reduction data not available.")
     
-    # Near-square interpretation
-    ns_label = summary.get_near_square_label()
-    if ns_label == "HIGH":
-        lines.append("Target appears near-square (factors likely similar size).")
-    elif ns_label == "LOW":
-        lines.append("Target appears skewed (factors likely different sizes).")
+    # Near-square interpretation (check for None)
+    if summary.near_square_score is not None:
+        ns_label = summary.get_near_square_label()
+        if ns_label == "HIGH":
+            lines.append("Target appears near-square (factors likely similar size).")
+        elif ns_label == "LOW":
+            lines.append("Target appears skewed (factors likely different sizes).")
     
     # Confidence interpretation (if available)
     if summary.confidence is not None:
