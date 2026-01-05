@@ -1,0 +1,35 @@
+{
+  "termination_reason": "entropy_converged",
+  "steps_taken": 18,
+  "entropy_start": 2.0794415408798357,
+  "entropy_end": 1.7536692148741677,
+  "entropy_delta": -0.32577232600566797,
+  "entropy_pct_reduction": 15.666337312268464,
+  "confidence": 0.16288616300283398,
+  "near_square_score": 0.48051948051948046,
+  "size_window_low": 3.0,
+  "size_window_high": 7.0,
+  "top_residues_mod30": [
+    [
+      7,
+      0.2592374930258508
+    ],
+    [
+      11,
+      0.23763436860702997
+    ],
+    [
+      1,
+      0.22063976194904222
+    ]
+  ],
+  "interpretation_lines": [
+    "Inference made minimal progress (< 20% entropy reduction).",
+    "System expressed low confidence (0.16)."
+  ],
+  "target_n": 77,
+  "bit_length": 7,
+  "max_steps": 200,
+  "min_steps": 0,
+  "early_stop_enabled": true
+}

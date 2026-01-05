@@ -719,82 +719,52 @@ class GameLearningApp(tk.Tk):
                 self.results_summary_text.insert(1.0, summary_text)
             
             # Load and display InferenceSummary if available
-            summary_json_file = self._last_run_dir / "inference_summary.json"
-            if summary_json_file.exists():
-                with open(summary_json_file, "r", encoding="utf-8") as f:
-                    summary_data = json.load(f)
-                    summary = InferenceSummary.from_dict(summary_data)
-                
-                # Build structured display
-                belief_display = "INFERENCE RUN CARD\n"
-                belief_display += "=" * 70 + "\n\n"
-                belief_display += f"Target N: {summary.target_n}\n"
-                belief_display += f"Bit length: {summary.bit_length}\n"
-                belief_display += f"Assumptions: odd, semiprime (see config.json)\n\n"
-                
-                belief_display += "BELIEF STATE SUMMARY\n"
-                belief_display += "-" * 70 + "\n"
-                belief_display += f"Termination reason: {summary.termination_reason}\n"
-                belief_display += f"Steps taken: {summary.steps_taken}\n"
-                belief_display += f"Entropy: {summary.format_entropy_change()}\n"
-                belief_display += f"Confidence: {summary.confidence:.3f}\n" if summary.confidence else "Confidence: n/a\n"
-                belief_display += f"Near-square score: {summary.near_square_score:.3f} ({summary.get_near_square_label()})\n"
-                belief_display += f"Estimated smaller factor magnitude:\n"
-                belief_display += f"{summary.format_size_window(summary.target_n)}\n"
-                belief_display += f"Top residues (mod 30): {summary.format_residues()}\n\n"
-                
-                belief_display += "INTERPRETATION\n"
-                belief_display += "-" * 70 + "\n"
-                for line in summary.interpretation_lines:
-                    belief_display += f"• {line}\n"
-                belief_display += "\n"
-                
-                # Load verification result if available
-                verification_file = self._last_run_dir / "verification.json"
-                if verification_file.exists():
-                    with open(verification_file, "r", encoding="utf-8") as f:
-                        verification_data = json.load(f)
-                        verification = VerificationResult.from_dict(verification_data)
-                    
-                    belief_display += "VERIFICATION RESULT\n"
-                    belief_display += "-" * 70 + "\n"
-                    if verification.verifier_skipped:
-                        belief_display += f"Verifier skipped: {verification.skip_reason}\n\n"
-                    else:
-                        belief_display += f"Factors found: {'YES' if verification.factors_found else 'NO'}\n"
-                        if verification.factors_found:
-                            belief_display += f"p = {verification.p}\n"
-                            belief_display += f"q = {verification.q}\n"
-                        elif not verification.factors_found and verification.failure_reason:
-                            belief_display += f"Reason: {verification.failure_reason}\n"
-                        belief_display += f"Window width: {verification.window_width}\n"
-                        belief_display += f"Checks attempted: {verification.checks_attempted}\n"
-                        belief_display += f"Time: {verification.time_ms:.2f} ms\n\n"
-                
-                # Load baseline comparison if available
-                baseline_file = self._last_run_dir / "baseline.json"
-                if baseline_file.exists():
-                    with open(baseline_file, "r", encoding="utf-8") as f:
-                        baseline_data = json.load(f)
-                        baseline = BaselineComparison.from_dict(baseline_data)
-                    
-                    belief_display += "BASELINE COMPARISON\n"
-                    belief_display += "-" * 70 + "\n"
-                    belief_display += f"Method: {baseline.method_name}\n"
-                    belief_display += f"Factors found: {'YES' if baseline.factors_found else 'NO'}\n"
-                    if baseline.factors_found:
-                        belief_display += f"p = {baseline.p}\n"
-                        belief_display += f"q = {baseline.q}\n"
-                    belief_display += f"Checks attempted: {baseline.checks_attempted}\n"
-                    belief_display += f"Time: {baseline.time_ms:.2f} ms\n\n"
-                
-                belief_display += "=" * 70 + "\n"
-                belief_display += "See summary.txt and config.json for full details.\n"
-                
+            # First try to load pre-formatted run_card.txt (single source of truth)
+            run_card_file = self._last_run_dir / "run_card.txt"
+            if run_card_file.exists():
+                with open(run_card_file, "r", encoding="utf-8") as f:
+                    belief_display = f.read()
                 self.belief_text.delete(1.0, tk.END)
                 self.belief_text.insert(1.0, belief_display)
             else:
-                # Fallback to old belief_final.json if inference_summary.json not available
+                # Fallback: generate from JSON (ensures consistency even for old runs)
+                summary_json_file = self._last_run_dir / "inference_summary.json"
+                if summary_json_file.exists():
+                    from domains.arithmetic.reporting import build_inference_run_card_text
+                    
+                    with open(summary_json_file, "r", encoding="utf-8") as f:
+                        summary_data = json.load(f)
+                        summary = InferenceSummary.from_dict(summary_data)
+                    
+                    # Load verification if available
+                    verification = None
+                    verification_file = self._last_run_dir / "verification.json"
+                    if verification_file.exists():
+                        with open(verification_file, "r", encoding="utf-8") as f:
+                            verification_data = json.load(f)
+                            verification = VerificationResult.from_dict(verification_data)
+                    
+                    # Load baseline if available
+                    baseline = None
+                    baseline_file = self._last_run_dir / "baseline.json"
+                    if baseline_file.exists():
+                        with open(baseline_file, "r", encoding="utf-8") as f:
+                            baseline_data = json.load(f)
+                            baseline = BaselineComparison.from_dict(baseline_data)
+                    
+                    # Load config if available
+                    config = None
+                    config_file = self._last_run_dir / "config.json"
+                    if config_file.exists():
+                        with open(config_file, "r", encoding="utf-8") as f:
+                            config = json.load(f)
+                    
+                    # Generate run card text using single source of truth
+                    belief_display = build_inference_run_card_text(summary, verification, baseline, config)
+                    self.belief_text.delete(1.0, tk.END)
+                    self.belief_text.insert(1.0, belief_display)
+                else:
+                    # Ultimate fallback to old belief_final.json if inference_summary.json not available
                 belief_file = self._last_run_dir / "belief_final.json"
                 if belief_file.exists():
                     with open(belief_file, "r", encoding="utf-8") as f:
@@ -911,7 +881,7 @@ class GameLearningApp(tk.Tk):
         
         from domains.arithmetic.env import SemiprimeInferenceEnv
         from domains.arithmetic.verifier import verify_factors_from_belief, run_baseline_fermat, run_baseline_trial_division
-        from domains.arithmetic.reporting import write_summary_txt, VerificationResult, BaselineComparison
+        from domains.arithmetic.reporting import write_summary_txt, write_run_card_txt, VerificationResult, BaselineComparison
         
         # Create output directory
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1080,7 +1050,11 @@ class GameLearningApp(tk.Tk):
         
         # Write summary.txt (human-readable)
         summary_txt_file = run_dir / "summary.txt"
-        write_summary_txt(summary, str(summary_txt_file), verification, baseline)
+        write_summary_txt(summary, str(summary_txt_file), verification, baseline, config)
+        
+        # Write run_card.txt (compact version for GUI display)
+        run_card_file = run_dir / "run_card.txt"
+        write_run_card_txt(summary, str(run_card_file), verification, baseline, config)
         
         self._append_inference_log(f"✓ All artifacts saved to {run_dir}")
     

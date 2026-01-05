@@ -263,81 +263,240 @@ def compute_adaptive_window(target_n: int, near_square_score: float, assume_odd:
     return lines[:3]  # Max 3 lines
 
 
+def build_inference_summary_text(summary: InferenceSummary, 
+                                 verification: Optional[VerificationResult] = None,
+                                 baseline: Optional[BaselineComparison] = None,
+                                 config: Optional[Dict[str, Any]] = None) -> str:
+    """
+    Build human-readable summary text from structured data.
+    This is the SINGLE SOURCE OF TRUTH for formatting summary information.
+    
+    Args:
+        summary: Inference summary object
+        verification: Optional verification result
+        baseline: Optional baseline comparison
+        config: Optional config dict for additional context
+    
+    Returns:
+        Formatted summary text string
+    """
+    lines = []
+    lines.append("=" * 70)
+    lines.append("ARITHMETIC FACTOR INFERENCE RUN SUMMARY")
+    lines.append("=" * 70)
+    lines.append("")
+    
+    # Target info
+    if summary.target_n is not None:
+        lines.append(f"Target N: {summary.target_n}")
+        if summary.bit_length is not None:
+            lines.append(f"Bit length: {summary.bit_length}")
+        lines.append("")
+    
+    # Inference limits (if available)
+    if summary.max_steps is not None:
+        limit_parts = [f"Max steps: {summary.max_steps}"]
+        if summary.min_steps is not None:
+            limit_parts.append(f"Min steps: {summary.min_steps}")
+        if summary.early_stop_enabled is not None:
+            early_stop_str = "enabled" if summary.early_stop_enabled else "disabled"
+            limit_parts.append(f"Early-stop: {early_stop_str}")
+        lines.append(", ".join(limit_parts))
+        lines.append("")
+    
+    # Termination
+    lines.append(f"Termination reason: {summary.termination_reason}")
+    lines.append(f"Steps taken: {summary.steps_taken}")
+    lines.append("")
+    
+    # Entropy
+    lines.append("ENTROPY METRICS")
+    lines.append("-" * 70)
+    lines.append(f"Start: {summary.entropy_start:.4f}")
+    lines.append(f"End: {summary.entropy_end:.4f}")
+    lines.append(f"Delta (end-start): {summary.entropy_delta:+.4f}")
+    lines.append(f"Reduction: {summary.entropy_pct_reduction:.2f}%")
+    lines.append("")
+    
+    # Belief state
+    lines.append("BELIEF STATE")
+    lines.append("-" * 70)
+    lines.append(f"Confidence: {summary.confidence if summary.confidence is not None else 'n/a'}")
+    lines.append(f"Near-square score: {summary.near_square_score:.3f} ({summary.get_near_square_label()})")
+    lines.append(f"Estimated smaller factor magnitude:")
+    lines.append(f"  {summary.format_size_window(summary.target_n)}")
+    lines.append(f"Top residues (mod 30): {summary.format_residues()}")
+    lines.append("")
+    
+    # Interpretation
+    lines.append("INTERPRETATION")
+    lines.append("-" * 70)
+    for line in summary.interpretation_lines:
+        lines.append(f"• {line}")
+    lines.append("")
+    
+    # Verification (if available)
+    if verification is not None:
+        lines.append("VERIFICATION RESULT")
+        lines.append("-" * 70)
+        if verification.verifier_skipped:
+            lines.append(f"Verifier skipped: {verification.skip_reason}")
+        else:
+            lines.append(f"Factors found: {'YES' if verification.factors_found else 'NO'}")
+            if verification.factors_found and verification.p is not None:
+                lines.append(f"p = {verification.p}")
+                lines.append(f"q = {verification.q}")
+            elif not verification.factors_found and verification.failure_reason:
+                lines.append(f"Reason: {verification.failure_reason}")
+            lines.append(f"Window width: {verification.window_width}")
+            lines.append(f"Checks attempted: {verification.checks_attempted}")
+            lines.append(f"Time: {verification.time_ms:.2f} ms")
+        lines.append("")
+    
+    # Baseline (if available)
+    if baseline is not None:
+        lines.append("BASELINE COMPARISON")
+        lines.append("-" * 70)
+        lines.append(f"Method: {baseline.method_name}")
+        lines.append(f"Factors found: {'YES' if baseline.factors_found else 'NO'}")
+        if baseline.factors_found:
+            lines.append(f"p = {baseline.p}")
+            lines.append(f"q = {baseline.q}")
+        lines.append(f"Checks attempted: {baseline.checks_attempted}")
+        lines.append(f"Time: {baseline.time_ms:.2f} ms")
+        lines.append("")
+    
+    return "\n".join(lines)
+
+
+def build_inference_run_card_text(summary: InferenceSummary,
+                                  verification: Optional[VerificationResult] = None,
+                                  baseline: Optional[BaselineComparison] = None,
+                                  config: Optional[Dict[str, Any]] = None) -> str:
+    """
+    Build compact run card text from structured data.
+    This is the SINGLE SOURCE OF TRUTH for formatting run card information.
+    Uses same formatting rules as build_inference_summary_text but more compact.
+    
+    Args:
+        summary: Inference summary object
+        verification: Optional verification result
+        baseline: Optional baseline comparison  
+        config: Optional config dict for additional context
+    
+    Returns:
+        Formatted run card text string
+    """
+    lines = []
+    lines.append("INFERENCE RUN CARD")
+    lines.append("=" * 70)
+    lines.append("")
+    
+    # Target info
+    if summary.target_n is not None:
+        lines.append(f"Target N: {summary.target_n}")
+        if summary.bit_length is not None:
+            lines.append(f"Bit length: {summary.bit_length}")
+        if config:
+            assumptions = config.get('assumptions', {})
+            lines.append(f"Assumptions: odd={assumptions.get('is_odd', True)}, semiprime={assumptions.get('is_semiprime', True)}")
+        lines.append("")
+    
+    # Config limits
+    if summary.max_steps is not None:
+        limit_parts = [f"Max steps: {summary.max_steps}"]
+        if summary.min_steps is not None:
+            limit_parts.append(f"Min steps: {summary.min_steps}")
+        if summary.early_stop_enabled is not None:
+            early_stop_str = "enabled" if summary.early_stop_enabled else "disabled"
+            limit_parts.append(f"Early-stop: {early_stop_str}")
+        lines.append(", ".join(limit_parts))
+        lines.append("")
+    
+    # Belief state summary
+    lines.append("BELIEF STATE SUMMARY")
+    lines.append("-" * 70)
+    lines.append(f"Termination reason: {summary.termination_reason}")
+    lines.append(f"Steps taken: {summary.steps_taken}")
+    lines.append(f"Entropy: {summary.format_entropy_change()}")
+    lines.append(f"Confidence: {summary.confidence:.3f}" if summary.confidence is not None else "Confidence: n/a")
+    lines.append(f"Near-square score: {summary.near_square_score:.3f} ({summary.get_near_square_label()})")
+    lines.append(f"Estimated smaller factor magnitude:")
+    lines.append(f"  {summary.format_size_window(summary.target_n)}")
+    lines.append(f"Top residues (mod 30): {summary.format_residues()}")
+    lines.append("")
+    
+    # Interpretation
+    lines.append("INTERPRETATION")
+    lines.append("-" * 70)
+    for line in summary.interpretation_lines:
+        lines.append(f"• {line}")
+    lines.append("")
+    
+    # Verification (if available)
+    if verification is not None:
+        lines.append("VERIFICATION RESULT")
+        lines.append("-" * 70)
+        if verification.verifier_skipped:
+            lines.append(f"Verifier skipped: {verification.skip_reason}")
+        else:
+            lines.append(f"Factors found: {'YES' if verification.factors_found else 'NO'}")
+            if verification.factors_found and verification.p is not None:
+                lines.append(f"p = {verification.p}")
+                lines.append(f"q = {verification.q}")
+            elif not verification.factors_found and verification.failure_reason:
+                lines.append(f"Reason: {verification.failure_reason}")
+            lines.append(f"Window width: {verification.window_width}, Checks: {verification.checks_attempted}, Time: {verification.time_ms:.2f} ms")
+        lines.append("")
+    
+    # Baseline (if available)
+    if baseline is not None:
+        lines.append("BASELINE COMPARISON")
+        lines.append("-" * 70)
+        lines.append(f"{baseline.method_name}: {'YES' if baseline.factors_found else 'NO'} ({baseline.checks_attempted} checks, {baseline.time_ms:.2f} ms)")
+        if baseline.factors_found:
+            lines.append(f"Factors: {baseline.p} × {baseline.q}")
+        lines.append("")
+    
+    return "\n".join(lines)
+
+
 def write_summary_txt(summary: InferenceSummary, filepath: str, 
                       verification: Optional[VerificationResult] = None,
-                      baseline: Optional[BaselineComparison] = None) -> None:
+                      baseline: Optional[BaselineComparison] = None,
+                      config: Optional[Dict[str, Any]] = None) -> None:
     """
-    Write human-readable summary.txt file.
+    Write human-readable summary.txt file using single source of truth function.
     
     Args:
         summary: Inference summary to write
         filepath: Path to summary.txt file
         verification: Optional verification result
         baseline: Optional baseline comparison
+        config: Optional config dict
     """
+    text = build_inference_summary_text(summary, verification, baseline, config)
     with open(filepath, 'w', encoding='utf-8') as f:
-        f.write("=" * 70 + "\n")
-        f.write("ARITHMETIC FACTOR INFERENCE RUN SUMMARY\n")
-        f.write("=" * 70 + "\n\n")
-        
-        # Target info
-        if summary.target_n is not None:
-            f.write(f"Target N: {summary.target_n}\n")
-            if summary.bit_length is not None:
-                f.write(f"Bit length: {summary.bit_length}\n")
-            f.write("\n")
-        
-        # Inference limits (if available)
-        if summary.max_steps is not None:
-            f.write(f"Max steps: {summary.max_steps}")
-            if summary.min_steps is not None:
-                f.write(f", Min steps: {summary.min_steps}")
-            if summary.early_stop_enabled is not None:
-                early_stop_str = "enabled" if summary.early_stop_enabled else "disabled"
-                f.write(f", Early-stop: {early_stop_str}")
-            f.write("\n\n")
-        
-        # Termination
-        f.write(f"Termination reason: {summary.termination_reason}\n")
-        f.write(f"Steps taken: {summary.steps_taken}\n\n")
-        
-        # Entropy
-        f.write("ENTROPY METRICS\n")
-        f.write("-" * 70 + "\n")
-        f.write(f"Start: {summary.entropy_start:.4f}\n")
-        f.write(f"End: {summary.entropy_end:.4f}\n")
-        f.write(f"Delta: {summary.entropy_delta:+.4f}\n")
-        f.write(f"Reduction: {summary.entropy_pct_reduction:.2f}%\n\n")
-        
-        # Belief state
-        f.write("BELIEF STATE\n")
-        f.write("-" * 70 + "\n")
-        f.write(f"Confidence: {summary.confidence if summary.confidence is not None else 'n/a'}\n")
-        f.write(f"Near-square score: {summary.near_square_score:.3f} ({summary.get_near_square_label()})\n")
-        f.write(f"Estimated smaller factor magnitude:\n")
-        f.write(f"{summary.format_size_window(summary.target_n)}\n")
-        f.write(f"Top residues (mod 30): {summary.format_residues()}\n\n")
-        
-        # Interpretation
-        f.write("INTERPRETATION\n")
-        f.write("-" * 70 + "\n")
-        for line in summary.interpretation_lines:
-            f.write(f"• {line}\n")
-        f.write("\n")
-        
-        # Verification (if available)
-        if verification is not None:
-            f.write("VERIFICATION RESULT\n")
-            f.write("-" * 70 + "\n")
-            if verification.verifier_skipped:
-                f.write(f"Verifier skipped: {verification.skip_reason}\n\n")
-            else:
-                f.write(f"Factors found: {'YES' if verification.factors_found else 'NO'}\n")
-                if verification.factors_found and verification.p is not None:
-                    f.write(f"p = {verification.p}\n")
-                    f.write(f"q = {verification.q}\n")
-                elif not verification.factors_found and verification.failure_reason:
-                    f.write(f"Reason: {verification.failure_reason}\n")
+        f.write(text)
+
+
+def write_run_card_txt(summary: InferenceSummary, filepath: str,
+                       verification: Optional[VerificationResult] = None,
+                       baseline: Optional[BaselineComparison] = None,
+                       config: Optional[Dict[str, Any]] = None) -> None:
+    """
+    Write compact run_card.txt file using single source of truth function.
+    
+    Args:
+        summary: Inference summary to write
+        filepath: Path to run_card.txt file
+        verification: Optional verification result
+        baseline: Optional baseline comparison
+        config: Optional config dict
+    """
+    text = build_inference_run_card_text(summary, verification, baseline, config)
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(text)
                 f.write(f"Window width: {verification.window_width if verification.window_width else 'n/a'}\n")
                 f.write(f"Checks attempted: {verification.checks_attempted}\n")
                 f.write(f"Time: {verification.time_ms:.2f} ms\n\n")

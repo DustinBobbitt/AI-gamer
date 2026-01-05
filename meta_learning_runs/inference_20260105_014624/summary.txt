@@ -1,0 +1,41 @@
+======================================================================
+ARITHMETIC FACTOR INFERENCE RUN SUMMARY
+======================================================================
+
+Target N: 77
+Bit length: 7
+
+Max steps: 200, Min steps: 0, Early-stop: enabled
+
+Termination reason: entropy_converged
+Steps taken: 18
+
+ENTROPY METRICS
+----------------------------------------------------------------------
+Start: 2.0794
+End: 1.7537
+Delta: -0.3258
+Reduction: 15.67%
+
+BELIEF STATE
+----------------------------------------------------------------------
+Confidence: 0.16288616300283398
+Near-square score: 0.481 (MED)
+Estimated smaller factor magnitude:
+~ [3.0, 7.0] (≈ 0.34–0.80 × sqrt(N))
+Top residues (mod 30): 7:0.26, 11:0.24, 1:0.22
+
+INTERPRETATION
+----------------------------------------------------------------------
+• Inference made minimal progress (< 20% entropy reduction).
+• System expressed low confidence (0.16).
+
+VERIFICATION RESULT
+----------------------------------------------------------------------
+Factors found: NO
+Reason: no valid factors found within inferred window
+Window width: 2
+Checks attempted: 2
+Time: 0.05 ms
+
+======================================================================
