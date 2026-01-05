@@ -497,20 +497,3 @@ def write_run_card_txt(summary: InferenceSummary, filepath: str,
     text = build_inference_run_card_text(summary, verification, baseline, config)
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(text)
-                f.write(f"Window width: {verification.window_width if verification.window_width else 'n/a'}\n")
-                f.write(f"Checks attempted: {verification.checks_attempted}\n")
-                f.write(f"Time: {verification.time_ms:.2f} ms\n\n")
-        
-        # Baseline (if available)
-        if baseline is not None:
-            f.write("BASELINE COMPARISON\n")
-            f.write("-" * 70 + "\n")
-            f.write(f"Method: {baseline.method_name}\n")
-            f.write(f"Factors found: {'YES' if baseline.factors_found else 'NO'}\n")
-            if baseline.factors_found and baseline.p is not None:
-                f.write(f"p = {baseline.p}\n")
-                f.write(f"q = {baseline.q}\n")
-            f.write(f"Checks attempted: {baseline.checks_attempted}\n")
-            f.write(f"Time: {baseline.time_ms:.2f} ms\n\n")
-        
-        f.write("=" * 70 + "\n")
