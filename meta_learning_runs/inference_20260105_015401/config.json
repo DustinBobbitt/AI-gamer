@@ -1,0 +1,22 @@
+{
+  "target_n": 77,
+  "assumptions": {
+    "is_odd": true,
+    "is_semiprime": true,
+    "allow_square": false
+  },
+  "policy": "learned",
+  "limits": {
+    "max_steps": 200,
+    "min_steps": 0,
+    "epsilon": 0.0001,
+    "disable_early_stop": false,
+    "display_precision": 20
+  },
+  "options": {
+    "show_debug": false,
+    "allow_update_policy": false,
+    "verify_factors": true,
+    "compare_baseline": false
+  }
+}

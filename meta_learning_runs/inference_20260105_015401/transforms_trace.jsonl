@@ -1,0 +1,8 @@
+{"step": 1, "transform": "SmoothnessHeuristicUpdate({})", "entropy": 2.0794415408798357}
+{"step": 2, "transform": "NearSquareUpdate({})", "entropy": 2.0794415408798357}
+{"step": 3, "transform": "SmoothnessHeuristicUpdate({})", "entropy": 2.0794415408798357}
+{"step": 4, "transform": "ConstraintFusionUpdate({})", "entropy": 2.0498333162837166}
+{"step": 5, "transform": "ResidueConsistencyUpdate({})", "entropy": 2.049833316283717}
+{"step": 6, "transform": "SmoothnessHeuristicUpdate({})", "entropy": 2.049833316283717}
+{"step": 7, "transform": "ResidueConsistencyUpdate({})", "entropy": 2.0498333162837166}
+{"step": 8, "transform": "ResidueConsistencyUpdate({})", "entropy": 2.049833316283717}

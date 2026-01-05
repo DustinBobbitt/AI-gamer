@@ -1,0 +1,11 @@
+{
+  "factors_found": false,
+  "p": null,
+  "q": null,
+  "window_width": 2,
+  "checks_attempted": 2,
+  "time_ms": 0.04489999992074445,
+  "verifier_skipped": false,
+  "skip_reason": null,
+  "failure_reason": "no valid factors found within inferred window"
+}

@@ -1,0 +1,31 @@
+INFERENCE RUN CARD
+======================================================================
+
+Target N: 77
+Bit length: 7
+Assumptions: odd=True, semiprime=True
+
+Max steps: 200, Min steps: 0, Early-stop: enabled
+
+BELIEF STATE SUMMARY
+----------------------------------------------------------------------
+Termination reason: entropy_converged
+Steps taken: 8
+Entropy: 2.079 → 2.050 (Δ-0.030, 1.4%)
+Confidence: 0.015
+Near-square score: 0.481 (MED)
+Estimated smaller factor magnitude:
+  ~ [3.0, 7.0] (≈ 0.34–0.80 × sqrt(N))
+Top residues (mod 30): 17:0.17, 11:0.16, 7:0.14
+
+INTERPRETATION
+----------------------------------------------------------------------
+• Inference made minimal progress (< 20% entropy reduction).
+• N is very small; limited structural inference is expected at this scale.
+• System expressed low confidence (0.01).
+
+VERIFICATION RESULT
+----------------------------------------------------------------------
+Factors found: NO
+Reason: no valid factors found within inferred window
+Window width: 2, Checks: 2, Time: 0.04 ms
