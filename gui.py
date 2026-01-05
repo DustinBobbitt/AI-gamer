@@ -655,11 +655,11 @@ class GameLearningApp(tk.Tk):
             },
             "policy": "learned" if self.use_learned_policy_var.get() else "baseline",
             "limits": {
-                "max_steps": int(self.max_steps_var.get()),
-                "min_steps": int(self.min_steps_var.get()),
-                "epsilon": float(self.epsilon_var.get()),
+                "max_steps": int(self.max_steps_var.get() or "200"),
+                "min_steps": int(self.min_steps_var.get() or "0"),
+                "epsilon": float(self.epsilon_var.get() or "1e-4"),
                 "disable_early_stop": self.disable_early_stop_var.get(),
-                "display_precision": int(self.display_precision_var.get())
+                "display_precision": int(self.display_precision_var.get() or "20")
             },
             "options": {
                 "show_debug": self.show_debug_var.get(),
@@ -1074,8 +1074,6 @@ class GameLearningApp(tk.Tk):
         for line in summary.interpretation_lines:
             self.summary_interpretation_text.insert(tk.END, "• " + line + "\n")
         self.summary_interpretation_text.config(state=tk.DISABLED)
-        
-        self._append_inference_log(f"✓ Inference complete. Results saved to {run_dir}")
 
 
 def main() -> None:
