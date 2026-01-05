@@ -213,12 +213,16 @@ class SemiprimeInferenceEnv(DomainTask):
     
     def _compute_info(self) -> Dict[str, Any]:
         """Compute evaluation metrics using ground truth (for reporting only)."""
-        # Compute true size ratio
-        true_ratio = min(self.true_p, self.true_q) / max(self.true_p, self.true_q)
-        
-        # Compute proximity to truth
-        estimated_ratio = self.belief_state.size_ratio_estimate
-        ratio_error = abs(estimated_ratio - true_ratio)
+        # Compute true size ratio (only if factors are known)
+        if self.true_p is not None and self.true_q is not None:
+            true_ratio = min(self.true_p, self.true_q) / max(self.true_p, self.true_q)
+            estimated_ratio = self.belief_state.size_ratio_estimate
+            ratio_error = abs(estimated_ratio - true_ratio)
+        else:
+            # Factors unknown (user-provided N)
+            true_ratio = None
+            estimated_ratio = self.belief_state.size_ratio_estimate
+            ratio_error = None
         
         return {
             'N': self.current_N,
@@ -232,6 +236,7 @@ class SemiprimeInferenceEnv(DomainTask):
             'step': self.step_count,
             'termination_reason': self.termination_reason
         }
+
     
     def get_action_space(self) -> List[int]:
         """Return list of available transform IDs."""
