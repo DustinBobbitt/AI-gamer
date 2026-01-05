@@ -55,3 +55,35 @@ def primes_up_to(limit: int) -> List[int]:
             start = p * p
             sieve[start : limit + 1 : step] = b"\x00" * (((limit - start) // step) + 1)
     return [i for i, is_p in enumerate(sieve) if is_p]
+
+
+def generate_prime(bit_length: int) -> int:
+    """
+    Generate a random prime with specified bit length.
+    Uses rejection sampling with Miller-Rabin primality test.
+    
+    Args:
+        bit_length: Number of bits in the prime
+    
+    Returns:
+        A prime number with the specified bit length
+    """
+    import random
+    
+    if bit_length < 2:
+        raise ValueError("bit_length must be >= 2")
+    
+    # Generate random odd number in range [2^(n-1), 2^n - 1]
+    min_val = 1 << (bit_length - 1)
+    max_val = (1 << bit_length) - 1
+    
+    # Try up to 1000 candidates (expected ~log(N) tries)
+    for _ in range(1000):
+        candidate = random.randrange(min_val, max_val + 1)
+        if candidate % 2 == 0:
+            candidate += 1
+        if is_prime(candidate):
+            return candidate
+    
+    raise RuntimeError(f"Failed to generate prime with {bit_length} bits after 1000 attempts")
+
