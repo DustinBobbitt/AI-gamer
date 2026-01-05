@@ -214,7 +214,7 @@ def write_summary_txt(summary: InferenceSummary, filepath: str,
         verification: Optional verification result
         baseline: Optional baseline comparison
     """
-    with open(filepath, 'w') as f:
+    with open(filepath, 'w', encoding='utf-8') as f:
         f.write("=" * 70 + "\n")
         f.write("ARITHMETIC FACTOR INFERENCE RUN SUMMARY\n")
         f.write("=" * 70 + "\n\n")
