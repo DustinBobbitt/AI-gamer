@@ -10,6 +10,7 @@ from domains.base import DomainTask, ScenarioConfig, DomainMetrics, DomainDiffic
 from domains.arithmetic.state import BeliefState
 from domains.arithmetic.transforms import Transform, TransformLibrary, TransformResult
 from domains.arithmetic.scenarios import SemiprimeScenario, ScenarioGenerator, DistributionType
+from domains.arithmetic.reporting import InferenceSummary, generate_interpretation
 
 
 class SemiprimeInferenceEnv(DomainTask):
@@ -50,6 +51,12 @@ class SemiprimeInferenceEnv(DomainTask):
         self.entropy_history: List[float] = []
         self.reward_history: List[float] = []
         self.transform_sequence: List[str] = []
+        
+        # Termination tracking
+        self.termination_reason: str = ""
+        self.convergence_threshold: float = 0.001  # Entropy change threshold
+        self.convergence_window: int = 5  # Steps to check for convergence
+        self.entropy_start: float = 0.0
     
     def make_scenario(self, rng: Any, difficulty: DomainDifficulty) -> ScenarioConfig:
         """Generate a new scenario configuration."""
@@ -101,6 +108,8 @@ class SemiprimeInferenceEnv(DomainTask):
         self.entropy_history = [self.belief_state.entropy_estimate]
         self.reward_history = []
         self.transform_sequence = []
+        self.termination_reason = ""
+        self.entropy_start = self.belief_state.entropy_estimate
         
         return self._get_observation()
     
@@ -142,8 +151,8 @@ class SemiprimeInferenceEnv(DomainTask):
         self.reward_history.append(reward)
         self.transform_sequence.append(transform.get_description())
         
-        # Done if max steps or high confidence
-        done = (self.step_count >= self.max_steps) or (self.belief_state.confidence > 0.95)
+        # Check termination conditions
+        done, self.termination_reason = self._check_termination()
         
         # Compute evaluation metrics (using hidden ground truth)
         info = self._compute_info()
@@ -173,6 +182,35 @@ class SemiprimeInferenceEnv(DomainTask):
         observation = np.concatenate([belief_vec, n_features])
         return observation
     
+    def _check_termination(self) -> Tuple[bool, str]:
+        """Check termination conditions and return (done, reason)."""
+        # Invalid input check
+        if self.current_N is None or self.current_N <= 1:
+            return True, "invalid_input"
+        
+        # Max steps reached
+        if self.step_count >= self.max_steps:
+            return True, "max_steps"
+        
+        # High confidence threshold
+        if self.belief_state.confidence > 0.95:
+            return True, "confidence_reached"
+        
+        # Entropy convergence check (last N steps have minimal change)
+        if len(self.entropy_history) >= self.convergence_window:
+            recent_entropies = self.entropy_history[-self.convergence_window:]
+            entropy_range = max(recent_entropies) - min(recent_entropies)
+            if entropy_range < self.convergence_threshold:
+                return True, "entropy_converged"
+        
+        # Policy stalled check (no change in entropy for M consecutive steps)
+        if len(self.entropy_history) >= 10:
+            recent_entropies = self.entropy_history[-10:]
+            if all(abs(e - recent_entropies[0]) < 1e-6 for e in recent_entropies):
+                return True, "policy_stalled"
+        
+        return False, ""
+    
     def _compute_info(self) -> Dict[str, Any]:
         """Compute evaluation metrics using ground truth (for reporting only)."""
         # Compute true size ratio
@@ -191,7 +229,8 @@ class SemiprimeInferenceEnv(DomainTask):
             'ratio_error': ratio_error,
             'entropy': self.belief_state.entropy_estimate,
             'confidence': self.belief_state.confidence,
-            'step': self.step_count
+            'step': self.step_count,
+            'termination_reason': self.termination_reason
         }
     
     def get_action_space(self) -> List[int]:
@@ -281,5 +320,54 @@ Near Square: {self.belief_state.near_square_score:.3f}
             'reward_history': self.reward_history,
             'transform_sequence': self.transform_sequence,
             'final_belief': self.belief_state.to_dict() if self.belief_state else {},
-            'total_reward': sum(self.reward_history)
+            'total_reward': sum(self.reward_history),
+            'termination_reason': self.termination_reason
         }
+    
+    def generate_inference_summary(self) -> InferenceSummary:
+        """Generate structured InferenceSummary for reporting."""
+        if self.belief_state is None:
+            raise RuntimeError("Cannot generate summary before episode completes")
+        
+        # Calculate entropy metrics
+        entropy_end = self.belief_state.entropy_estimate
+        entropy_delta = self.entropy_start - entropy_end
+        entropy_pct = (entropy_delta / self.entropy_start * 100) if self.entropy_start > 0 else 0.0
+        
+        # Extract top residues
+        residue_weights = [(i, w) for i, w in enumerate(self.belief_state.residue_weights_mod30)]
+        residue_weights.sort(key=lambda x: x[1], reverse=True)
+        valid_residues = [1, 7, 11, 13, 17, 19, 23, 29]
+        top_residues = [(valid_residues[i], w) for i, w in residue_weights[:3]]
+        
+        # Estimate size window (heuristic based on size_ratio and N)
+        sqrt_n = np.sqrt(self.current_N)
+        if self.belief_state.size_ratio_estimate > 0.8:  # Near-square
+            window_low = sqrt_n * 0.9
+            window_high = sqrt_n * 1.1
+        else:  # Skewed
+            window_low = sqrt_n * self.belief_state.size_ratio_estimate * 0.8
+            window_high = sqrt_n * self.belief_state.size_ratio_estimate * 1.2
+        
+        # Create summary
+        summary = InferenceSummary(
+            termination_reason=self.termination_reason,
+            steps_taken=self.step_count,
+            entropy_start=self.entropy_start,
+            entropy_end=entropy_end,
+            entropy_delta=entropy_delta,
+            entropy_pct_reduction=entropy_pct,
+            confidence=self.belief_state.confidence,
+            near_square_score=self.belief_state.near_square_score,
+            size_window_low=window_low,
+            size_window_high=window_high,
+            top_residues_mod30=top_residues,
+            interpretation_lines=[],  # Will be filled next
+            target_n=self.current_N,
+            bit_length=self.current_N.bit_length() if self.current_N else 0
+        )
+        
+        # Generate interpretation
+        summary.interpretation_lines = generate_interpretation(summary)
+        
+        return summary

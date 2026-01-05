@@ -212,7 +212,7 @@ class GameLearningApp(tk.Tk):
         )
         
         self.assume_semiprime_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(assumptions_frame, text="Assume N is semiprime (p×q)", variable=self.assume_semiprime_var).grid(
+        ttk.Checkbutton(assumptions_frame, text="Assume N has exactly two prime factors", variable=self.assume_semiprime_var).grid(
             row=1, column=0, sticky=tk.W, padx=5, pady=2
         )
         
@@ -239,8 +239,21 @@ class GameLearningApp(tk.Tk):
         )
         
         self.allow_update_policy_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(assumptions_frame, text="Allow inference to update policy", variable=self.allow_update_policy_var).grid(
-            row=3, column=0, columnspan=2, sticky=tk.W, padx=5, pady=2
+        ttk.Checkbutton(assumptions_frame, text="Allow learning during inference (experimental)", variable=self.allow_update_policy_var).grid(
+            row=3, column=0, sticky=tk.W, padx=5, pady=2
+        )
+        
+        # Verification options (new)
+        self.verify_factors_var = tk.BooleanVar(value=True)  # Default ON for generated semiprimes
+        ttk.Checkbutton(assumptions_frame, text="Verify factors using narrowed window (evaluation/optional)", 
+                       variable=self.verify_factors_var).grid(
+            row=4, column=0, columnspan=2, sticky=tk.W, padx=5, pady=2
+        )
+        
+        self.compare_baseline_var = tk.BooleanVar(value=False)  # Default OFF
+        ttk.Checkbutton(assumptions_frame, text="Compare with baseline (Fermat near-square, small-trial)", 
+                       variable=self.compare_baseline_var).grid(
+            row=5, column=0, columnspan=2, sticky=tk.W, padx=5, pady=2
         )
         
         # Inference Limits section
@@ -269,7 +282,7 @@ class GameLearningApp(tk.Tk):
         preset_frame = ttk.Frame(tab)
         preset_frame.pack(fill=tk.X, pady=5, padx=5)
         
-        ttk.Label(preset_frame, text="Test scenario presets:").pack(side=tk.LEFT, padx=5)
+        ttk.Label(preset_frame, text="Scale preset:").pack(side=tk.LEFT, padx=5)
         self.preset_var = tk.StringVar(value="Medium")
         preset_combo = ttk.Combobox(preset_frame, textvariable=self.preset_var,
                                     values=["Small demo (fast)", "Medium", "Large"],
@@ -323,6 +336,38 @@ class GameLearningApp(tk.Tk):
         
         self.inference_progress = ttk.Progressbar(status_frame, orient="horizontal", length=300, mode="determinate")
         self.inference_progress.pack(side=tk.LEFT, padx=5)
+        
+        # Belief Summary section (new - structured output after run)
+        summary_frame = ttk.LabelFrame(tab, text="Belief Summary (after inference)")
+        summary_frame.pack(fill=tk.X, pady=5, padx=5)
+        
+        # Create grid layout for summary fields
+        summary_labels = [
+            "Termination reason:",
+            "Steps taken:",
+            "Entropy:",
+            "Confidence:",
+            "Near-square score:",
+            "Size window (smaller factor):",
+            "Residue preferences (mod 30):",
+            "Interpretation:"
+        ]
+        
+        self.summary_vars = {}
+        for i, label_text in enumerate(summary_labels):
+            ttk.Label(summary_frame, text=label_text, font=("", 9, "bold")).grid(
+                row=i, column=0, sticky=tk.W, padx=5, pady=2
+            )
+            var = tk.StringVar(value="—")
+            label = ttk.Label(summary_frame, textvariable=var, font=("", 9))
+            label.grid(row=i, column=1, sticky=tk.W, padx=5, pady=2)
+            self.summary_vars[label_text] = var
+        
+        # Interpretation uses a Text widget for multi-line display
+        self.summary_interpretation_text = tk.Text(summary_frame, wrap=tk.WORD, height=3, font=("", 9))
+        self.summary_interpretation_text.grid(row=7, column=1, sticky=tk.EW, padx=5, pady=2)
+        self.summary_interpretation_text.config(state=tk.DISABLED)
+        summary_frame.columnconfigure(1, weight=1)
         
         # Log area
         log_frame = ttk.LabelFrame(tab, text="Inference Log")
@@ -545,7 +590,9 @@ class GameLearningApp(tk.Tk):
             },
             "options": {
                 "show_debug": self.show_debug_var.get(),
-                "allow_update_policy": self.allow_update_policy_var.get()
+                "allow_update_policy": self.allow_update_policy_var.get(),
+                "verify_factors": self.verify_factors_var.get(),
+                "compare_baseline": self.compare_baseline_var.get()
             }
         }
         
@@ -584,6 +631,9 @@ class GameLearningApp(tk.Tk):
             return
         
         try:
+            import json
+            from domains.arithmetic.reporting import InferenceSummary, VerificationResult, BaselineComparison
+            
             # Load summary.txt
             summary_file = self._last_run_dir / "summary.txt"
             if summary_file.exists():
@@ -592,18 +642,90 @@ class GameLearningApp(tk.Tk):
                 self.results_summary_text.delete(1.0, tk.END)
                 self.results_summary_text.insert(1.0, summary_text)
             
-            # Load belief state if available
-            belief_file = self._last_run_dir / "belief_final.json"
-            if belief_file.exists():
-                import json
-                with open(belief_file, "r") as f:
-                    belief_data = json.load(f)
+            # Load and display InferenceSummary if available
+            summary_json_file = self._last_run_dir / "inference_summary.json"
+            if summary_json_file.exists():
+                with open(summary_json_file, "r") as f:
+                    summary_data = json.load(f)
+                    summary = InferenceSummary.from_dict(summary_data)
                 
-                belief_display = "Belief State:\n" + "="*60 + "\n"
-                belief_display += json.dumps(belief_data, indent=2)
+                # Build structured display
+                belief_display = "INFERENCE RUN CARD\n"
+                belief_display += "=" * 70 + "\n\n"
+                belief_display += f"Target N: {summary.target_n}\n"
+                belief_display += f"Bit length: {summary.bit_length}\n"
+                belief_display += f"Assumptions: odd, semiprime (see config.json)\n\n"
+                
+                belief_display += "BELIEF STATE SUMMARY\n"
+                belief_display += "-" * 70 + "\n"
+                belief_display += f"Termination reason: {summary.termination_reason}\n"
+                belief_display += f"Steps taken: {summary.steps_taken}\n"
+                belief_display += f"Entropy: {summary.format_entropy_change()}\n"
+                belief_display += f"Confidence: {summary.confidence:.3f}\n" if summary.confidence else "Confidence: n/a\n"
+                belief_display += f"Near-square score: {summary.near_square_score:.3f} ({summary.get_near_square_label()})\n"
+                belief_display += f"Size window: {summary.format_size_window()}\n"
+                belief_display += f"Top residues (mod 30): {summary.format_residues()}\n\n"
+                
+                belief_display += "INTERPRETATION\n"
+                belief_display += "-" * 70 + "\n"
+                for line in summary.interpretation_lines:
+                    belief_display += f"• {line}\n"
+                belief_display += "\n"
+                
+                # Load verification result if available
+                verification_file = self._last_run_dir / "verification.json"
+                if verification_file.exists():
+                    with open(verification_file, "r") as f:
+                        verification_data = json.load(f)
+                        verification = VerificationResult.from_dict(verification_data)
+                    
+                    belief_display += "VERIFICATION RESULT\n"
+                    belief_display += "-" * 70 + "\n"
+                    if verification.verifier_skipped:
+                        belief_display += f"Verifier skipped: {verification.skip_reason}\n\n"
+                    else:
+                        belief_display += f"Factors found: {'YES' if verification.factors_found else 'NO'}\n"
+                        if verification.factors_found:
+                            belief_display += f"p = {verification.p}\n"
+                            belief_display += f"q = {verification.q}\n"
+                        belief_display += f"Window width: {verification.window_width}\n"
+                        belief_display += f"Checks attempted: {verification.checks_attempted}\n"
+                        belief_display += f"Time: {verification.time_ms:.2f} ms\n\n"
+                
+                # Load baseline comparison if available
+                baseline_file = self._last_run_dir / "baseline.json"
+                if baseline_file.exists():
+                    with open(baseline_file, "r") as f:
+                        baseline_data = json.load(f)
+                        baseline = BaselineComparison.from_dict(baseline_data)
+                    
+                    belief_display += "BASELINE COMPARISON\n"
+                    belief_display += "-" * 70 + "\n"
+                    belief_display += f"Method: {baseline.method_name}\n"
+                    belief_display += f"Factors found: {'YES' if baseline.factors_found else 'NO'}\n"
+                    if baseline.factors_found:
+                        belief_display += f"p = {baseline.p}\n"
+                        belief_display += f"q = {baseline.q}\n"
+                    belief_display += f"Checks attempted: {baseline.checks_attempted}\n"
+                    belief_display += f"Time: {baseline.time_ms:.2f} ms\n\n"
+                
+                belief_display += "=" * 70 + "\n"
+                belief_display += "See summary.txt and config.json for full details.\n"
                 
                 self.belief_text.delete(1.0, tk.END)
                 self.belief_text.insert(1.0, belief_display)
+            else:
+                # Fallback to old belief_final.json if inference_summary.json not available
+                belief_file = self._last_run_dir / "belief_final.json"
+                if belief_file.exists():
+                    with open(belief_file, "r") as f:
+                        belief_data = json.load(f)
+                    
+                    belief_display = "Belief State:\n" + "="*60 + "\n"
+                    belief_display += json.dumps(belief_data, indent=2)
+                    
+                    self.belief_text.delete(1.0, tk.END)
+                    self.belief_text.insert(1.0, belief_display)
             
             # Update header
             self.results_header_text.set(f"Results from: {self._last_run_dir.name}")
@@ -694,6 +816,9 @@ class GameLearningApp(tk.Tk):
         """Execute an inference run on a specific target N."""
         import json
         from datetime import datetime
+        from domains.arithmetic.env import SemiprimeInferenceEnv
+        from domains.arithmetic.verifier import verify_factors_from_belief, run_baseline_fermat, run_baseline_trial_division
+        from domains.arithmetic.reporting import write_summary_txt, VerificationResult, BaselineComparison
         
         # Create output directory
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -708,46 +833,175 @@ class GameLearningApp(tk.Tk):
         
         self._append_inference_log(f"Created run directory: {run_dir}")
         
-        # TODO: Implement actual inference logic here
-        # This is a placeholder that demonstrates the structure
+        # Initialize environment
         target_n = config["target_n"]
         max_steps = config["limits"]["max_steps"]
+        
+        env = SemiprimeInferenceEnv(config={
+            'max_steps': max_steps,
+            'bit_length': target_n.bit_length(),
+            'distribution_type': 'unknown'  # User-provided N
+        })
         
         self._append_inference_log(f"Running inference on N = {target_n}")
         self._append_inference_log(f"Max steps: {max_steps}")
         self._append_inference_log(f"Policy: {config['policy']}")
         
-        # Simulate some progress
-        import time
-        for i in range(10):
-            time.sleep(0.2)
-            pct = (i + 1) * 10
-            self.after(0, lambda p=pct: self.inference_progress.configure(value=p))
-            self.after(0, lambda p=pct: self._append_inference_log(f"Progress: {p}%"))
+        # Initialize environment with target N (manually set for user-provided input)
+        env.current_N = target_n
+        env.true_p = None  # Unknown
+        env.true_q = None  # Unknown
+        from domains.arithmetic.state import BeliefState
+        env.belief_state = BeliefState()
+        env.belief_state.update_entropy()
+        env.step_count = 0
+        env.entropy_history = [env.belief_state.entropy_estimate]
+        env.reward_history = []
+        env.transform_sequence = []
+        env.termination_reason = ""
+        env.entropy_start = env.belief_state.entropy_estimate
         
-        # Write mock results
-        summary_file = run_dir / "summary.txt"
-        with open(summary_file, "w") as f:
-            f.write(f"Inference Run Summary\n")
-            f.write(f"{'='*60}\n")
-            f.write(f"Timestamp: {timestamp}\n")
-            f.write(f"Target N: {target_n}\n")
-            f.write(f"Policy: {config['policy']}\n")
-            f.write(f"Max steps: {max_steps}\n")
-            f.write(f"{'='*60}\n")
-            f.write(f"Inference completed.\n")
-            f.write(f"(Full inference implementation pending)\n")
+        # Run inference loop
+        done = False
+        step = 0
         
-        # Write mock belief state
-        belief_file = run_dir / "belief_final.json"
-        with open(belief_file, "w") as f:
-            json.dump({
-                "target_n": target_n,
-                "steps": 100,
-                "entropy": 0.123,
-                "confidence": 0.85,
-                "note": "Mock data - full implementation pending"
-            }, f, indent=2)
+        while not done and step < max_steps:
+            # Simple random policy (TODO: integrate with Brain)
+            import random
+            action = random.randint(0, len(env.get_action_space()) - 1)
+            
+            obs, reward, done, info = env.step(action)
+            step += 1
+            
+            # Update progress
+            progress_pct = int((step / max_steps) * 100)
+            self.after(0, lambda p=progress_pct: self.inference_progress.configure(value=p))
+            
+            # Log step (if debug enabled)
+            if config['options'].get('show_debug'):
+                entropy = info.get('entropy', 0)
+                transform = info.get('transform_applied', 'unknown')
+                self.after(0, lambda s=step, e=entropy, t=transform: 
+                          self._append_inference_log(f"Step {s}: {t} | Entropy: {e:.4f}"))
+        
+        # Generate inference summary
+        summary = env.generate_inference_summary()
+        self._append_inference_log(f"✓ Inference completed. Reason: {summary.termination_reason}")
+        self._append_inference_log(f"  Entropy: {summary.format_entropy_change()}")
+        self._append_inference_log(f"  Confidence: {summary.confidence:.3f}")
+        
+        # Update GUI Belief Summary
+        self.after(0, lambda: self._update_belief_summary(summary))
+        
+        # Write transforms trace
+        transforms_file = run_dir / "transforms_trace.jsonl"
+        with open(transforms_file, "w") as f:
+            for i, (transform_name, entropy_val) in enumerate(zip(env.transform_sequence, env.entropy_history[1:])):
+                record = {
+                    "step": i + 1,
+                    "transform": transform_name,
+                    "entropy": entropy_val
+                }
+                f.write(json.dumps(record) + "\n")
+        
+        # Write metrics
+        metrics_file = run_dir / "metrics.json"
+        metrics_data = {
+            "entropy_series": env.entropy_history,
+            "reward_series": env.reward_history,
+            "transform_sequence": env.transform_sequence,
+            "termination_reason": summary.termination_reason
+        }
+        with open(metrics_file, "w") as f:
+            json.dump(metrics_data, f, indent=2)
+        
+        # Write inference summary
+        summary_json_file = run_dir / "inference_summary.json"
+        with open(summary_json_file, "w") as f:
+            f.write(summary.to_json())
+        
+        # Optional verification
+        verification = None
+        if config['options'].get('verify_factors', True):
+            self._append_inference_log("Running post-inference verification...")
+            verification = verify_factors_from_belief(target_n, env.belief_state, max_checks=100000)
+            
+            if verification.verifier_skipped:
+                self._append_inference_log(f"  Verifier skipped: {verification.skip_reason}")
+            elif verification.factors_found:
+                self._append_inference_log(f"  ✓ Factors found: {verification.p} × {verification.q}")
+                self._append_inference_log(f"  Checks attempted: {verification.checks_attempted}")
+                self._append_inference_log(f"  Time: {verification.time_ms:.2f} ms")
+            else:
+                self._append_inference_log(f"  No factors found in window (width: {verification.window_width})")
+                self._append_inference_log(f"  Checks attempted: {verification.checks_attempted}")
+            
+            # Write verification result
+            verification_file = run_dir / "verification.json"
+            with open(verification_file, "w") as f:
+                f.write(verification.to_json())
+        
+        # Optional baseline comparison
+        baseline = None
+        if config['options'].get('compare_baseline', False):
+            self._append_inference_log("Running baseline comparison...")
+            
+            # Try Fermat first (good for near-square)
+            found, p, q, iters, time_ms = run_baseline_fermat(target_n, max_iterations=10000)
+            
+            if found:
+                baseline = BaselineComparison(
+                    method_name="Fermat near-square",
+                    checks_attempted=iters,
+                    time_ms=time_ms,
+                    factors_found=True,
+                    p=p,
+                    q=q
+                )
+                self._append_inference_log(f"  Fermat: Found {p} × {q} in {iters} iterations ({time_ms:.2f} ms)")
+            else:
+                # Try trial division
+                found, p, q, checks, time_ms = run_baseline_trial_division(target_n, B=10000)
+                baseline = BaselineComparison(
+                    method_name="Trial division B=10000",
+                    checks_attempted=checks,
+                    time_ms=time_ms,
+                    factors_found=found,
+                    p=p,
+                    q=q
+                )
+                if found:
+                    self._append_inference_log(f"  Trial division: Found {p} × {q} in {checks} checks ({time_ms:.2f} ms)")
+                else:
+                    self._append_inference_log(f"  Trial division: No factors found (B=10000)")
+            
+            # Write baseline result
+            baseline_file = run_dir / "baseline.json"
+            with open(baseline_file, "w") as f:
+                f.write(baseline.to_json())
+        
+        # Write summary.txt (human-readable)
+        summary_txt_file = run_dir / "summary.txt"
+        write_summary_txt(summary, str(summary_txt_file), verification, baseline)
+        
+        self._append_inference_log(f"✓ All artifacts saved to {run_dir}")
+    
+    def _update_belief_summary(self, summary) -> None:
+        """Update the GUI Belief Summary section with InferenceSummary data."""
+        self.summary_vars["Termination reason:"].set(summary.termination_reason)
+        self.summary_vars["Steps taken:"].set(str(summary.steps_taken))
+        self.summary_vars["Entropy:"].set(summary.format_entropy_change())
+        self.summary_vars["Confidence:"].set(f"{summary.confidence:.3f}" if summary.confidence is not None else "n/a")
+        self.summary_vars["Near-square score:"].set(f"{summary.near_square_score:.3f} ({summary.get_near_square_label()})")
+        self.summary_vars["Size window (smaller factor):"].set(summary.format_size_window())
+        self.summary_vars["Residue preferences (mod 30):"].set(summary.format_residues())
+        
+        # Update interpretation text
+        self.summary_interpretation_text.config(state=tk.NORMAL)
+        self.summary_interpretation_text.delete(1.0, tk.END)
+        for line in summary.interpretation_lines:
+            self.summary_interpretation_text.insert(tk.END, "• " + line + "\n")
+        self.summary_interpretation_text.config(state=tk.DISABLED)
         
         self._append_inference_log(f"✓ Inference complete. Results saved to {run_dir}")
 
@@ -756,6 +1010,11 @@ def main() -> None:
     """Launch the CDI GUI."""
     app = GameLearningApp()
     app.mainloop()
+
+
+def launch_gui() -> None:
+    """Launch the AI Gamer GUI (alias for main)."""
+    main()
 
 
 if __name__ == "__main__":
