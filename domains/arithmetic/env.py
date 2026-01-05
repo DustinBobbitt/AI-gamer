@@ -33,6 +33,8 @@ class SemiprimeInferenceEnv(DomainTask):
         self.max_steps = config.get('max_steps', 50) if config else 50
         self.bit_length = config.get('bit_length', 32) if config else 32
         self.distribution_type = config.get('distribution_type', 'mixed') if config else 'mixed'
+        self.min_steps = config.get('min_steps', 0) if config else 0
+        self.disable_early_stop = config.get('disable_early_stop', False) if config else False
         
         # Current episode state
         self.current_N: Optional[int] = None
@@ -197,17 +199,19 @@ class SemiprimeInferenceEnv(DomainTask):
             return True, "confidence_reached"
         
         # Entropy convergence check (last N steps have minimal change)
-        if len(self.entropy_history) >= self.convergence_window:
-            recent_entropies = self.entropy_history[-self.convergence_window:]
-            entropy_range = max(recent_entropies) - min(recent_entropies)
-            if entropy_range < self.convergence_threshold:
-                return True, "entropy_converged"
+        if not self.disable_early_stop and self.step_count >= self.min_steps:
+            if len(self.entropy_history) >= self.convergence_window:
+                recent_entropies = self.entropy_history[-self.convergence_window:]
+                entropy_range = max(recent_entropies) - min(recent_entropies)
+                if entropy_range < self.convergence_threshold:
+                    return True, "entropy_converged"
         
         # Policy stalled check (no change in entropy for M consecutive steps)
-        if len(self.entropy_history) >= 10:
-            recent_entropies = self.entropy_history[-10:]
-            if all(abs(e - recent_entropies[0]) < 1e-6 for e in recent_entropies):
-                return True, "policy_stalled"
+        if not self.disable_early_stop and self.step_count >= self.min_steps:
+            if len(self.entropy_history) >= 10:
+                recent_entropies = self.entropy_history[-10:]
+                if all(abs(e - recent_entropies[0]) < 1e-6 for e in recent_entropies):
+                    return True, "policy_stalled"
         
         return False, ""
     
@@ -334,10 +338,11 @@ Near Square: {self.belief_state.near_square_score:.3f}
         if self.belief_state is None:
             raise RuntimeError("Cannot generate summary before episode completes")
         
-        # Calculate entropy metrics
+        # Calculate entropy metrics with consistent sign convention
         entropy_end = self.belief_state.entropy_estimate
-        entropy_delta = self.entropy_start - entropy_end
-        entropy_pct = (entropy_delta / self.entropy_start * 100) if self.entropy_start > 0 else 0.0
+        entropy_delta = entropy_end - self.entropy_start  # Delta = end - start (negative for reductions)
+        entropy_reduction = max(0, self.entropy_start - entropy_end)  # Always positive reduction
+        entropy_pct = (entropy_reduction / self.entropy_start * 100) if self.entropy_start > 0 else 0.0
         
         # Extract top residues
         residue_weights = [(i, w) for i, w in enumerate(self.belief_state.residue_weights_mod30)]
@@ -345,14 +350,13 @@ Near Square: {self.belief_state.near_square_score:.3f}
         valid_residues = [1, 7, 11, 13, 17, 19, 23, 29]
         top_residues = [(valid_residues[i], w) for i, w in residue_weights[:3]]
         
-        # Estimate size window (heuristic based on size_ratio and N)
-        sqrt_n = np.sqrt(self.current_N)
-        if self.belief_state.size_ratio_estimate > 0.8:  # Near-square
-            window_low = sqrt_n * 0.9
-            window_high = sqrt_n * 1.1
-        else:  # Skewed
-            window_low = sqrt_n * self.belief_state.size_ratio_estimate * 0.8
-            window_high = sqrt_n * self.belief_state.size_ratio_estimate * 1.2
+        # Use adaptive window estimation based on near_square_score
+        from domains.arithmetic.reporting import compute_adaptive_window
+        window_low, window_high = compute_adaptive_window(
+            self.current_N,
+            self.belief_state.near_square_score,
+            assume_odd=True  # Default assumption
+        )
         
         # Create summary
         summary = InferenceSummary(
@@ -364,12 +368,15 @@ Near Square: {self.belief_state.near_square_score:.3f}
             entropy_pct_reduction=entropy_pct,
             confidence=self.belief_state.confidence,
             near_square_score=self.belief_state.near_square_score,
-            size_window_low=window_low,
-            size_window_high=window_high,
+            size_window_low=float(window_low),
+            size_window_high=float(window_high),
             top_residues_mod30=top_residues,
             interpretation_lines=[],  # Will be filled next
             target_n=self.current_N,
-            bit_length=self.current_N.bit_length() if self.current_N else 0
+            bit_length=self.current_N.bit_length() if self.current_N else 0,
+            max_steps=self.max_steps,
+            min_steps=self.min_steps,
+            early_stop_enabled=not self.disable_early_stop
         )
         
         # Generate interpretation

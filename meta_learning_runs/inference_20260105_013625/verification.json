@@ -1,0 +1,11 @@
+{
+  "factors_found": false,
+  "p": null,
+  "q": null,
+  "window_width": 2,
+  "checks_attempted": 2,
+  "time_ms": 0.0335000004270114,
+  "verifier_skipped": false,
+  "skip_reason": null,
+  "failure_reason": "only trivial factorization (1 \u00d7 N) possible under inferred window"
+}

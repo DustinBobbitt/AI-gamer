@@ -154,11 +154,8 @@ def verify_factors_from_belief(
     # No valid prime factors found
     elapsed_ms = (time.perf_counter() - start_time) * 1000
     
-    # Determine failure reason
-    if window_width < 10:
-        failure_reason = "only trivial factorization (1 × N) possible under inferred window"
-    else:
-        failure_reason = "inferred window produced no valid prime factors"
+    # Honest failure reason - we searched the window and didn't find valid factors
+    failure_reason = "no valid factors found within inferred window"
     
     return VerificationResult(
         factors_found=False,

@@ -1,0 +1,40 @@
+======================================================================
+ARITHMETIC FACTOR INFERENCE RUN SUMMARY
+======================================================================
+
+Target N: 15
+Bit length: 4
+
+Termination reason: entropy_converged
+Steps taken: 4
+
+ENTROPY METRICS
+----------------------------------------------------------------------
+Start: 2.0794
+End: 2.0794
+Delta: +0.0000
+Reduction: 0.00%
+
+BELIEF STATE
+----------------------------------------------------------------------
+Confidence: 0.0
+Near-square score: 0.000 (LOW)
+Estimated smaller factor magnitude:
+~ [1.5, 2.3] (≈ 0.40–0.60 × sqrt(N))
+Top residues (mod 30): 1:0.12, 7:0.12, 11:0.12
+
+INTERPRETATION
+----------------------------------------------------------------------
+• Inference made minimal progress (< 20% entropy reduction).
+• N is very small; limited structural inference is expected at this scale.
+• Target appears skewed (factors likely different sizes).
+
+VERIFICATION RESULT
+----------------------------------------------------------------------
+Factors found: NO
+Reason: only trivial factorization (1 × N) possible under inferred window
+Window width: 1
+Checks attempted: 1
+Time: 0.05 ms
+
+======================================================================

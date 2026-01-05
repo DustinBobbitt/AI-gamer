@@ -1,0 +1,4 @@
+{"step": 1, "transform": "ResidueConsistencyUpdate({})", "entropy": 2.0794415408798357}
+{"step": 2, "transform": "NearSquareUpdate({})", "entropy": 2.0794415408798357}
+{"step": 3, "transform": "ResidueConsistencyUpdate({})", "entropy": 2.0794415408798357}
+{"step": 4, "transform": "SmoothnessHeuristicUpdate({})", "entropy": 2.0794415408798357}

@@ -41,6 +41,11 @@ class InferenceSummary:
     target_n: Optional[int] = None
     bit_length: Optional[int] = None
     
+    # Optional config info (for display)
+    max_steps: Optional[int] = None
+    min_steps: Optional[int] = None
+    early_stop_enabled: Optional[bool] = None
+    
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary."""
         return asdict(self)
@@ -66,10 +71,12 @@ class InferenceSummary:
             return "HIGH"
     
     def format_entropy_change(self) -> str:
-        """Format entropy change as readable string."""
+        """Format entropy change as readable string with consistent sign convention."""
         if self.entropy_start is None or self.entropy_end is None:
             return "n/a"
-        delta_str = f"{self.entropy_delta:+.3f}" if self.entropy_delta is not None else "+0.000"
+        # Delta = end - start (negative for reductions)
+        delta_val = self.entropy_end - self.entropy_start
+        delta_str = f"{delta_val:+.3f}"
         pct_str = f"{self.entropy_pct_reduction:.1f}%" if self.entropy_pct_reduction is not None else "0.0%"
         return f"{self.entropy_start:.3f} → {self.entropy_end:.3f} (Δ{delta_str}, {pct_str})"
     
@@ -166,6 +173,7 @@ def generate_interpretation(summary: InferenceSummary) -> List[str]:
         List of 1-3 interpretation lines (cautious language).
     """
     SMALL_N_THRESHOLD = 8  # bit_length threshold for small-N behavior
+    CONFIDENCE_THRESHOLD = 0.05  # Minimum confidence for making claims
     lines = []
     
     # Entropy interpretation (check for None to avoid comparison errors)
@@ -184,13 +192,13 @@ def generate_interpretation(summary: InferenceSummary) -> List[str]:
         if summary.entropy_pct_reduction is not None and summary.entropy_pct_reduction < 5:
             lines.append("N is very small; limited structural inference is expected at this scale.")
     
-    # Near-square interpretation (check for None)
-    if summary.near_square_score is not None:
+    # Near-square / skew interpretation (only if confidence sufficient)
+    if summary.near_square_score is not None and (summary.confidence is None or summary.confidence >= CONFIDENCE_THRESHOLD):
         ns_label = summary.get_near_square_label()
         if ns_label == "HIGH":
-            lines.append("Target appears near-square (factors likely similar size).")
+            lines.append("Under current constraints, target may have factors close in magnitude (near-square).")
         elif ns_label == "LOW":
-            lines.append("Target appears skewed (factors likely different sizes).")
+            lines.append("Under current constraints, target may be skewed (factors differ significantly in size).")
     
     # Confidence interpretation (if available)
     if summary.confidence is not None:
@@ -199,6 +207,59 @@ def generate_interpretation(summary: InferenceSummary) -> List[str]:
         elif summary.confidence < 0.3:
             lines.append(f"System expressed low confidence ({summary.confidence:.2f}).")
     
+    return lines
+
+
+def compute_adaptive_window(target_n: int, near_square_score: float, assume_odd: bool = True) -> Tuple[int, int]:
+    """
+    Compute adaptive smaller-factor window based on near_square_score.
+    
+    Args:
+        target_n: The semiprime N
+        near_square_score: Score in [0,1] indicating how close to square
+        assume_odd: Whether to force odd bounds
+    
+    Returns:
+        (low, high) bounds for smaller factor search
+    """
+    import math
+    
+    sqrt_n = math.sqrt(target_n)
+    
+    # Adaptive window based on near_square_score
+    if near_square_score >= 0.70:
+        # Near-square: factors close to sqrt(N)
+        center = 0.95 * sqrt_n
+        half_width = 0.20 * sqrt_n
+    elif near_square_score <= 0.30:
+        # Skewed: smaller factor much less than sqrt(N)
+        center = 0.35 * sqrt_n
+        half_width = 0.35 * sqrt_n  # Wider to include smaller factors
+    else:
+        # Medium: balanced window
+        center = 0.60 * sqrt_n
+        half_width = 0.30 * sqrt_n
+    
+    low = max(2, center - half_width)
+    high = max(low + 1, center + half_width)
+    
+    # Clamp high to sqrt(N) since smaller factor <= sqrt(N)
+    high = min(high, sqrt_n)
+    
+    # Convert to integers
+    low_int = int(low)
+    high_int = int(high)
+    
+    # Force odd bounds if assume_odd
+    if assume_odd:
+        if low_int % 2 == 0:
+            low_int += 1
+        if high_int % 2 == 0:
+            high_int -= 1
+    
+    return low_int, max(low_int, high_int)
+
+
     return lines[:3]  # Max 3 lines
 
 
@@ -225,6 +286,16 @@ def write_summary_txt(summary: InferenceSummary, filepath: str,
             if summary.bit_length is not None:
                 f.write(f"Bit length: {summary.bit_length}\n")
             f.write("\n")
+        
+        # Inference limits (if available)
+        if summary.max_steps is not None:
+            f.write(f"Max steps: {summary.max_steps}")
+            if summary.min_steps is not None:
+                f.write(f", Min steps: {summary.min_steps}")
+            if summary.early_stop_enabled is not None:
+                early_stop_str = "enabled" if summary.early_stop_enabled else "disabled"
+                f.write(f", Early-stop: {early_stop_str}")
+            f.write("\n\n")
         
         # Termination
         f.write(f"Termination reason: {summary.termination_reason}\n")

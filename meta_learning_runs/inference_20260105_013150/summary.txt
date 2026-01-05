@@ -1,0 +1,22 @@
+======================================================================
+ARITHMETIC FACTOR INFERENCE RUN SUMMARY
+======================================================================
+
+Target N: 15
+Bit length: 4
+
+Termination reason: entropy_converged
+Steps taken: 4
+
+ENTROPY METRICS
+----------------------------------------------------------------------
+Start: 2.0794
+End: 2.0794
+Delta: +0.0000
+Reduction: 0.00%
+
+BELIEF STATE
+----------------------------------------------------------------------
+Confidence: 0.0
+Near-square score: 0.333 (MED)
+Estimated smaller factor magnitude:

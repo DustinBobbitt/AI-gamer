@@ -266,16 +266,27 @@ class GameLearningApp(tk.Tk):
             row=0, column=1, sticky=tk.W, padx=5, pady=2
         )
         
-        ttk.Label(limits_frame, text="Stop if entropy change <").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
-        self.epsilon_var = tk.StringVar(value="1e-4")
-        ttk.Entry(limits_frame, textvariable=self.epsilon_var, width=10).grid(
+        ttk.Label(limits_frame, text="Min inference steps:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
+        self.min_steps_var = tk.StringVar(value="0")
+        ttk.Entry(limits_frame, textvariable=self.min_steps_var, width=10).grid(
             row=1, column=1, sticky=tk.W, padx=5, pady=2
         )
         
-        ttk.Label(limits_frame, text="Display precision (digits):").grid(row=2, column=0, sticky=tk.W, padx=5, pady=2)
+        ttk.Label(limits_frame, text="Stop if entropy change <").grid(row=2, column=0, sticky=tk.W, padx=5, pady=2)
+        self.epsilon_var = tk.StringVar(value="1e-4")
+        ttk.Entry(limits_frame, textvariable=self.epsilon_var, width=10).grid(
+            row=2, column=1, sticky=tk.W, padx=5, pady=2
+        )
+        
+        self.disable_early_stop_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(limits_frame, text="Disable early-stop (debug)", variable=self.disable_early_stop_var).grid(
+            row=3, column=0, columnspan=2, sticky=tk.W, padx=5, pady=2
+        )
+        
+        ttk.Label(limits_frame, text="Display precision (digits):").grid(row=4, column=0, sticky=tk.W, padx=5, pady=2)
         self.display_precision_var = tk.StringVar(value="20")
         ttk.Entry(limits_frame, textvariable=self.display_precision_var, width=10).grid(
-            row=2, column=1, sticky=tk.W, padx=5, pady=2
+            row=4, column=1, sticky=tk.W, padx=5, pady=2
         )
         
         # Test scenario presets
@@ -514,9 +525,11 @@ class GameLearningApp(tk.Tk):
         preset = self.preset_var.get()
         if preset == "Small demo (fast)":
             self.max_steps_var.set("50")
+            self.min_steps_var.set("0")
             self.epsilon_var.set("1e-3")
         elif preset == "Medium":
             self.max_steps_var.set("200")
+            self.min_steps_var.set("0")
             self.epsilon_var.set("1e-4")
         elif preset == "Large":
             self.max_steps_var.set("1000")
@@ -643,7 +656,9 @@ class GameLearningApp(tk.Tk):
             "policy": "learned" if self.use_learned_policy_var.get() else "baseline",
             "limits": {
                 "max_steps": int(self.max_steps_var.get()),
+                "min_steps": int(self.min_steps_var.get()),
                 "epsilon": float(self.epsilon_var.get()),
+                "disable_early_stop": self.disable_early_stop_var.get(),
                 "display_precision": int(self.display_precision_var.get())
             },
             "options": {
@@ -698,7 +713,7 @@ class GameLearningApp(tk.Tk):
             # Load summary.txt
             summary_file = self._last_run_dir / "summary.txt"
             if summary_file.exists():
-                with open(summary_file, "r") as f:
+                with open(summary_file, "r", encoding="utf-8") as f:
                     summary_text = f.read()
                 self.results_summary_text.delete(1.0, tk.END)
                 self.results_summary_text.insert(1.0, summary_text)
@@ -706,7 +721,7 @@ class GameLearningApp(tk.Tk):
             # Load and display InferenceSummary if available
             summary_json_file = self._last_run_dir / "inference_summary.json"
             if summary_json_file.exists():
-                with open(summary_json_file, "r") as f:
+                with open(summary_json_file, "r", encoding="utf-8") as f:
                     summary_data = json.load(f)
                     summary = InferenceSummary.from_dict(summary_data)
                 
@@ -737,7 +752,7 @@ class GameLearningApp(tk.Tk):
                 # Load verification result if available
                 verification_file = self._last_run_dir / "verification.json"
                 if verification_file.exists():
-                    with open(verification_file, "r") as f:
+                    with open(verification_file, "r", encoding="utf-8") as f:
                         verification_data = json.load(f)
                         verification = VerificationResult.from_dict(verification_data)
                     
@@ -759,7 +774,7 @@ class GameLearningApp(tk.Tk):
                 # Load baseline comparison if available
                 baseline_file = self._last_run_dir / "baseline.json"
                 if baseline_file.exists():
-                    with open(baseline_file, "r") as f:
+                    with open(baseline_file, "r", encoding="utf-8") as f:
                         baseline_data = json.load(f)
                         baseline = BaselineComparison.from_dict(baseline_data)
                     
@@ -782,7 +797,7 @@ class GameLearningApp(tk.Tk):
                 # Fallback to old belief_final.json if inference_summary.json not available
                 belief_file = self._last_run_dir / "belief_final.json"
                 if belief_file.exists():
-                    with open(belief_file, "r") as f:
+                    with open(belief_file, "r", encoding="utf-8") as f:
                         belief_data = json.load(f)
                     
                     belief_display = "Belief State:\n" + "="*60 + "\n"
@@ -840,7 +855,7 @@ class GameLearningApp(tk.Tk):
         
         # Save config
         config_file = run_dir / "config.json"
-        with open(config_file, "w") as f:
+        with open(config_file, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
         
         self._append_meta_log(f"Created run directory: {run_dir}")
@@ -863,7 +878,7 @@ class GameLearningApp(tk.Tk):
         
         # Write summary
         summary_file = run_dir / "summary.txt"
-        with open(summary_file, "w") as f:
+        with open(summary_file, "w", encoding="utf-8") as f:
             f.write(f"Meta-Learning Run Summary\n")
             f.write(f"{'='*60}\n")
             f.write(f"Timestamp: {timestamp}\n")
@@ -906,7 +921,7 @@ class GameLearningApp(tk.Tk):
         
         # Save config
         config_file = run_dir / "config.json"
-        with open(config_file, "w") as f:
+        with open(config_file, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
         
         self._append_inference_log(f"Created run directory: {run_dir}")
@@ -914,15 +929,21 @@ class GameLearningApp(tk.Tk):
         # Initialize environment
         target_n = config["target_n"]
         max_steps = config["limits"]["max_steps"]
+        min_steps = config["limits"]["min_steps"]
+        disable_early_stop = config["limits"]["disable_early_stop"]
         
         env = SemiprimeInferenceEnv(config={
             'max_steps': max_steps,
+            'min_steps': min_steps,
+            'disable_early_stop': disable_early_stop,
             'bit_length': target_n.bit_length(),
             'distribution_type': 'unknown'  # User-provided N
         })
         
         self._append_inference_log(f"Running inference on N = {target_n}")
-        self._append_inference_log(f"Max steps: {max_steps}")
+        self._append_inference_log(f"Max steps: {max_steps}, Min steps: {min_steps}")
+        early_stop_status = "disabled" if disable_early_stop else "enabled"
+        self._append_inference_log(f"Early-stop: {early_stop_status}")
         self._append_inference_log(f"Policy: {config['policy']}")
         
         # Initialize environment with target N (manually set for user-provided input)
@@ -972,7 +993,7 @@ class GameLearningApp(tk.Tk):
         
         # Write transforms trace
         transforms_file = run_dir / "transforms_trace.jsonl"
-        with open(transforms_file, "w") as f:
+        with open(transforms_file, "w", encoding="utf-8") as f:
             for i, (transform_name, entropy_val) in enumerate(zip(env.transform_sequence, env.entropy_history[1:])):
                 record = {
                     "step": i + 1,
@@ -989,12 +1010,12 @@ class GameLearningApp(tk.Tk):
             "transform_sequence": env.transform_sequence,
             "termination_reason": summary.termination_reason
         }
-        with open(metrics_file, "w") as f:
+        with open(metrics_file, "w", encoding="utf-8") as f:
             json.dump(metrics_data, f, indent=2)
         
         # Write inference summary
         summary_json_file = run_dir / "inference_summary.json"
-        with open(summary_json_file, "w") as f:
+        with open(summary_json_file, "w", encoding="utf-8") as f:
             f.write(summary.to_json())
         
         # Optional verification
@@ -1015,7 +1036,7 @@ class GameLearningApp(tk.Tk):
             
             # Write verification result
             verification_file = run_dir / "verification.json"
-            with open(verification_file, "w") as f:
+            with open(verification_file, "w", encoding="utf-8") as f:
                 f.write(verification.to_json())
         
         # Optional baseline comparison
@@ -1054,7 +1075,7 @@ class GameLearningApp(tk.Tk):
             
             # Write baseline result
             baseline_file = run_dir / "baseline.json"
-            with open(baseline_file, "w") as f:
+            with open(baseline_file, "w", encoding="utf-8") as f:
                 f.write(baseline.to_json())
         
         # Write summary.txt (human-readable)

@@ -1,0 +1,34 @@
+{
+  "entropy_series": [
+    2.0794415408798357,
+    2.0794415408798357,
+    2.0794415408798357,
+    2.0794415408798357,
+    2.0498333162837166,
+    2.049833316283717,
+    2.049833316283717,
+    2.0498333162837166,
+    2.0498333162837166
+  ],
+  "reward_series": [
+    0.0,
+    0.0,
+    0.0,
+    0.029608224596119115,
+    0.0,
+    0.0,
+    4.440892098500626e-16,
+    0.0
+  ],
+  "transform_sequence": [
+    "ResidueConsistencyUpdate({})",
+    "SmoothnessHeuristicUpdate({})",
+    "NearSquareUpdate({})",
+    "ConstraintFusionUpdate({})",
+    "ResidueConsistencyUpdate({})",
+    "NearSquareUpdate({})",
+    "ResidueConsistencyUpdate({})",
+    "SmoothnessHeuristicUpdate({})"
+  ],
+  "termination_reason": "entropy_converged"
+}
