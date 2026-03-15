@@ -44,7 +44,6 @@ class Game(ABC):
         self.name = self.__class__.__name__
         self.difficulty = GameDifficulty.MEDIUM
         self.state = None
-        self.reset()
     
     @abstractmethod
     def reset(self) -> GameState:
@@ -82,6 +81,7 @@ class TicTacToe(Game):
         self.board = None
         self.current_player = 1
         self.difficulty = GameDifficulty.EASY
+        self.reset()
     
     def reset(self) -> GameState:
         self.board = [[0 for _ in range(3)] for _ in range(3)]
@@ -165,12 +165,13 @@ class NumberGuessing(Game):
     """Simple number guessing game."""
     
     def __init__(self, config: Dict[str, Any] = None):
-        super().__init__(config)
         self.max_number = config.get('max_number', 100) if config else 100
+        self.max_attempts = 10
         self.target = None
         self.attempts = 0
-        self.max_attempts = 10
+        super().__init__(config)
         self.difficulty = GameDifficulty.TRIVIAL
+        self.reset()
     
     def reset(self) -> GameState:
         self.target = random.randint(1, self.max_number)
@@ -213,22 +214,44 @@ class NumberGuessing(Game):
 class GameGenerator:
     """Generates diverse games for training."""
     
-    def __init__(self):
+    def __init__(self, allowed_families: Optional[List[str]] = None):
         self.game_classes = [
             TicTacToe,
             NumberGuessing,
         ]
+        self._game_class_by_name = {
+            game_class.__name__: game_class
+            for game_class in self.game_classes
+        }
+        self.allowed_families = allowed_families or list(self._game_class_by_name.keys())
     
-    def generate_game(self, difficulty: GameDifficulty = None) -> Game:
+    def _candidate_classes(self, family: Optional[str] = None) -> List[type[Game]]:
+        if family and family != "Mixed":
+            game_class = self._game_class_by_name.get(family)
+            if game_class is None:
+                raise ValueError(f"Unknown game family: {family}")
+            return [game_class]
+        
+        candidates = [
+            self._game_class_by_name[name]
+            for name in self.allowed_families
+            if name in self._game_class_by_name
+        ]
+        if not candidates:
+            raise ValueError("No game families are enabled for generation")
+        return candidates
+    
+    def generate_game(self, difficulty: GameDifficulty = None, family: Optional[str] = None) -> Game:
         """Generate a random game, optionally filtered by difficulty."""
-        game_class = random.choice(self.game_classes)
+        candidate_classes = self._candidate_classes(family)
+        game_class = random.choice(candidate_classes)
         game = game_class()
         
         if difficulty is not None:
             # Re-sample if difficulty doesn't match
             attempts = 0
             while game.difficulty != difficulty and attempts < 10:
-                game_class = random.choice(self.game_classes)
+                game_class = random.choice(candidate_classes)
                 game = game_class()
                 attempts += 1
         

@@ -80,7 +80,12 @@ class Consolidator:
             'distill': 0.5
         }
     
-    def propose_consolidation(self, brain: Brain, target_compression: float = 0.3) -> ConsolidationProposal:
+    def propose_consolidation(
+        self,
+        brain: Brain,
+        target_compression: float = 0.3,
+        strategy: Optional[str] = None,
+    ) -> ConsolidationProposal:
         """
         Generate a consolidation proposal based on current brain state.
         
@@ -91,7 +96,10 @@ class Consolidator:
             brain.estimate_importance()
         
         # Choose consolidation strategy based on learned success rates
-        strategy = self._select_strategy()
+        if strategy is None:
+            strategy = self._select_strategy()
+        elif strategy not in self.strategy_success_rates:
+            raise ValueError(f"Unknown consolidation strategy: {strategy}")
         
         if strategy == 'prune':
             return self._propose_pruning(brain, target_compression)

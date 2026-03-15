@@ -83,14 +83,13 @@ class Brain:
         
         Returns action index (to be mapped to game-specific actions).
         """
-        # Placeholder: Simple forward pass
-        # In real implementation, this would be a full neural network forward pass
-        embedding = self.state.parameters['embedding']
-        policy_weights = self.state.parameters['policy_weights']
+        legal_actions = getattr(game_state, "legal_actions", None)
+        if legal_actions:
+            return int(np.random.choice(legal_actions))
         
-        # Simple random policy for now
+        policy_weights = self.state.parameters['policy_weights']
         num_actions = policy_weights.shape[0]
-        return np.random.randint(0, num_actions)
+        return int(np.random.randint(0, num_actions))
     
     def predict_value(self, game_state: Any) -> float:
         """Predict value of a game state."""
@@ -125,9 +124,9 @@ class Brain:
         This creates the G matrix that defines geometry on parameter space.
         High importance means the parameter is critical for performance.
         """
-        # Placeholder: Initialize importance matrix
+        # Use a diagonal approximation so importance estimation scales with model size.
         total_params = sum(p.size for p in self.state.parameters.values())
-        importance = np.eye(total_params) * 0.01
+        importance = np.full(total_params, 0.01, dtype=np.float32)
         
         # In real implementation:
         # - Compute gradients for each fisher sample

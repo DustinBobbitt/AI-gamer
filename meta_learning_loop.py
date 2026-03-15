@@ -8,17 +8,27 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import json
+import random
 from datetime import datetime
+
+import numpy as np
 
 from brain import Brain
 from game_generator import Game, GameGenerator, GameDifficulty
 from skill_memory import SkillMemory, Skill
 from consolidator import Consolidator, ConsolidationResult
 
+MAX_SEED = 2**32 - 1
+
 
 @dataclass
 class TrainingConfig:
     """Configuration for meta-learning loop."""
+
+    # Overall run
+    total_phases: int = 5
+    game_family: str = "Mixed"
+    consolidation_strategy: Optional[str] = None
     
     # Acquisition phase
     initial_games: int = 50
@@ -35,6 +45,7 @@ class TrainingConfig:
     # Learning
     brain_hidden_size: int = 256
     learning_rate: float = 0.001
+    seed: Optional[int] = None
     
     # Output
     output_dir: Path = Path("meta_learning_runs")
@@ -68,6 +79,12 @@ class MetaLearningLoop:
     
     def __init__(self, config: TrainingConfig = None):
         self.config = config or TrainingConfig()
+        self.config.output_dir = Path(self.config.output_dir)
+        if self.config.seed is not None:
+            if self.config.seed < 0 or self.config.seed > MAX_SEED:
+                raise ValueError(f"Seed must be between 0 and {MAX_SEED}")
+            random.seed(self.config.seed)
+            np.random.seed(self.config.seed)
         
         # Core components
         self.brain = Brain(hidden_size=self.config.brain_hidden_size)
@@ -84,7 +101,7 @@ class MetaLearningLoop:
         # Cold storage for parameter restoration
         self.parameter_checkpoints: List[Brain] = []
     
-    def run(self, total_phases: int = 10, progress_callback=None) -> Dict[str, Any]:
+    def run(self, total_phases: Optional[int] = None, progress_callback=None) -> Dict[str, Any]:
         """
         Run the complete meta-learning loop.
         
@@ -96,50 +113,58 @@ class MetaLearningLoop:
             Dictionary with training summary
         """
         run_start = datetime.now()
+        active_total_phases = total_phases or self.config.total_phases
         
-        for phase_num in range(total_phases):
+        for phase_num in range(active_total_phases):
             if progress_callback:
-                progress_callback(phase_num, total_phases, "Starting phase")
+                progress_callback(phase_num + 1, active_total_phases, f"Starting phase {phase_num + 1}")
             
             # Phase 1: Acquisition
             acquisition_metrics = self._acquisition_phase(
                 phase_num, 
+                active_total_phases,
                 progress_callback
             )
             self.phase_history.append(acquisition_metrics)
             
             # Phase 2: Importance Estimation
             if progress_callback:
-                progress_callback(phase_num, total_phases, "Estimating importance")
+                progress_callback(phase_num + 1, active_total_phases, "Estimating importance")
             self._importance_estimation_phase()
             
             # Phase 3: Consolidation (every N phases)
             if phase_num > 0 and phase_num % self.config.consolidation_frequency == 0:
                 if progress_callback:
-                    progress_callback(phase_num, total_phases, "Consolidating knowledge")
+                    progress_callback(phase_num + 1, active_total_phases, "Consolidating knowledge")
                 consolidation_result = self._consolidation_phase(progress_callback)
                 
                 # Phase 4: Regression Testing
                 if progress_callback:
-                    progress_callback(phase_num, total_phases, "Regression testing")
+                    progress_callback(phase_num + 1, active_total_phases, "Regression testing")
                 self._regression_testing_phase(consolidation_result)
                 
                 # Phase 5: Correction & Learning
                 if progress_callback:
-                    progress_callback(phase_num, total_phases, "Learning from consolidation")
+                    progress_callback(phase_num + 1, active_total_phases, "Learning from consolidation")
                 self._correction_phase(consolidation_result)
         
         run_duration = (datetime.now() - run_start).total_seconds()
         
         return self._generate_summary(run_duration)
     
-    def _acquisition_phase(self, phase_num: int, progress_callback=None) -> PhaseMetrics:
+    def _acquisition_phase(
+        self,
+        phase_num: int,
+        total_phases: int,
+        progress_callback=None,
+    ) -> PhaseMetrics:
         """
         Acquisition Phase: Train on new games without pruning.
         """
         phase_start = datetime.now()
         
-        games_this_phase = self.config.initial_games // 5  # Distribute across phases
+        base_games, remainder = divmod(self.config.initial_games, total_phases)
+        games_this_phase = base_games + (1 if phase_num < remainder else 0)
         total_reward = 0.0
         best_reward = float('-inf')
         skills_learned = 0
@@ -147,7 +172,7 @@ class MetaLearningLoop:
         
         for game_idx in range(games_this_phase):
             # Generate new game
-            game = self.game_generator.generate_game()
+            game = self.game_generator.generate_game(family=self.config.game_family)
             self.games_seen.append(game.name)
             
             # Train on this game
@@ -194,9 +219,9 @@ class MetaLearningLoop:
             
             if progress_callback:
                 progress_callback(
-                    game_idx, 
+                    game_idx + 1,
                     games_this_phase, 
-                    f"Game {game_idx+1}/{games_this_phase}: {game.name}"
+                    f"Game {game_idx + 1}/{games_this_phase}: {game.name}"
                 )
         
         phase_duration = (datetime.now() - phase_start).total_seconds()
@@ -229,7 +254,8 @@ class MetaLearningLoop:
         # Generate consolidation proposal
         proposal = self.consolidator.propose_consolidation(
             self.brain,
-            target_compression=self.config.target_compression
+            target_compression=self.config.target_compression,
+            strategy=self.config.consolidation_strategy,
         )
         
         # Apply consolidation

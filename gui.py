@@ -21,6 +21,7 @@ from utils.io import dump_json, dump_jsonl, dump_text, ensure_dir, make_run_dir
 from utils.rng import RandomSource
 
 __version__ = package_init.__version__
+MAX_SEED = 2**32 - 1
 
 
 class GameLearningApp(tk.Tk):
@@ -133,15 +134,27 @@ class GameLearningApp(tk.Tk):
         ttk.Checkbutton(
             options_frame,
             text="Use random seed each run (recommended)",
-            variable=self.random_seed_var
+            variable=self.random_seed_var,
+            command=self._update_meta_seed_state,
         ).grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
-        
+
+        ttk.Label(options_frame, text="Fixed seed:").grid(
+            row=1, column=0, sticky=tk.W, padx=5, pady=2
+        )
+        self.seed_var = tk.StringVar(value="0")
+        self.seed_entry = ttk.Entry(options_frame, textvariable=self.seed_var, width=14)
+        self.seed_entry.grid(row=1, column=1, sticky=tk.W, padx=5, pady=2)
+        ttk.Label(options_frame, text="(Used when random seed is off)").grid(
+            row=1, column=2, sticky=tk.W, padx=5, pady=2
+        )
+
         self.reset_policy_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             options_frame,
             text="Reset learned policy at start",
             variable=self.reset_policy_var
-        ).grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
+        ).grid(row=2, column=0, sticky=tk.W, padx=5, pady=2)
+        self._update_meta_seed_state()
 
         # Output directory
         output_frame = ttk.Frame(tab)
@@ -450,6 +463,10 @@ class GameLearningApp(tk.Tk):
         selected = filedialog.askdirectory(title="Select output base directory")
         if selected:
             self.out_var.set(selected)
+
+    def _update_meta_seed_state(self) -> None:
+        state = tk.DISABLED if self.random_seed_var.get() else tk.NORMAL
+        self.seed_entry.config(state=state)
     
     def _on_meta_learning_clicked(self) -> None:
         if self._worker_thread and self._worker_thread.is_alive():
@@ -465,6 +482,11 @@ class GameLearningApp(tk.Tk):
             
             if n_games < 1 or acq_rounds < 1 or cons_budget < 1 or test_games < 1:
                 raise ValueError("All values must be positive integers")
+            fixed_seed = None
+            if not self.random_seed_var.get():
+                fixed_seed = int(self.seed_var.get())
+                if fixed_seed < 0 or fixed_seed > MAX_SEED:
+                    raise ValueError(f"Seed must be between 0 and {MAX_SEED}")
         except ValueError as e:
             messagebox.showerror("CDI", f"Invalid configuration: {e}")
             return
@@ -479,9 +501,10 @@ class GameLearningApp(tk.Tk):
             "cons_budget": cons_budget,
             "test_games": test_games,
             "game_family": self.game_family_var.get(),
-            "consolidation_strategies": self.cons_strategy_var.get(),
+            "consolidation_strategy": self.cons_strategy_var.get(),
             "options": {
                 "random_seed": self.random_seed_var.get(),
+                "seed": fixed_seed,
                 "reset_policy_each_run": self.reset_policy_var.get()
             }
         }
@@ -493,12 +516,12 @@ class GameLearningApp(tk.Tk):
         
         def run_meta_learning():
             try:
-                self._append_meta_log("Starting meta-learning run...")
+                self.after(0, lambda: self._append_meta_log("Starting meta-learning run..."))
                 self._run_meta_learning(config)
-                self.after(0, lambda: self.meta_status_var.set("✓ Meta-learning complete!"))
+                self.after(0, lambda: self.meta_status_var.set("Meta-learning complete."))
                 self.after(0, lambda: self._switch_to_results_tab())
             except Exception as exc:
-                self.after(0, lambda: self.meta_status_var.set(f"✗ Error: {exc}"))
+                self.after(0, lambda: self.meta_status_var.set(f"Error: {exc}"))
                 self.after(0, lambda: messagebox.showerror("CDI", f"Error during meta-learning:\n{exc}"))
             finally:
                 self.after(0, lambda: self.meta_run_button.config(state=tk.NORMAL))
@@ -813,9 +836,15 @@ class GameLearningApp(tk.Tk):
     
     def _run_meta_learning(self, config: dict) -> None:
         """Execute a meta-learning run."""
-        from meta_learning_loop import MetaLearningLoop
+        from meta_learning_loop import MetaLearningLoop, TrainingConfig
         import json
+        import os
+        import random
         from datetime import datetime
+        import numpy as np
+
+        def post_log(message: str) -> None:
+            self.after(0, lambda msg=message: self._append_meta_log(msg))
         
         # Create output directory
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -823,28 +852,52 @@ class GameLearningApp(tk.Tk):
         run_dir.mkdir(parents=True, exist_ok=True)
         self._last_run_dir = run_dir
         
-        # Save config
+        if config["options"]["random_seed"]:
+            seed = int.from_bytes(os.urandom(4), "big")
+            post_log(f"Using random seed: {seed}")
+        else:
+            seed = int(config["options"]["seed"])
+            post_log(f"Using fixed seed: {seed}")
+        random.seed(seed)
+        np.random.seed(seed)
+
+        # Save config with the resolved seed used for this run.
+        config_to_save = dict(config)
+        config_to_save["options"] = dict(config["options"])
+        config_to_save["options"]["resolved_seed"] = seed
         config_file = run_dir / "config.json"
         with open(config_file, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2)
-        
-        self._append_meta_log(f"Created run directory: {run_dir}")
-        
-        # Initialize and run
-        loop = MetaLearningLoop(
-            n_games=config["n_games"],
-            acquisition_rounds=config["acq_rounds"],
-            consolidation_budget=config["cons_budget"],
-            test_games=config["test_games"],
-            run_dir=run_dir
+            json.dump(config_to_save, f, indent=2)
+
+        post_log(f"Created run directory: {run_dir}")
+
+        if config["options"]["reset_policy_each_run"]:
+            post_log("Starting from a fresh policy state.")
+
+        target_compression = max(0.05, min(0.95, config["cons_budget"] / 400.0))
+        training_config = TrainingConfig(
+            total_phases=5,
+            initial_games=config["n_games"],
+            episodes_per_game=config["acq_rounds"],
+            regression_suite_size=config["test_games"],
+            target_compression=target_compression,
+            output_dir=run_dir,
+            seed=seed,
+            game_family=config["game_family"],
+            consolidation_strategy=config["consolidation_strategy"],
         )
         
-        # Run with progress callbacks
-        def progress_callback(phase: str, pct: float):
-            self.after(0, lambda: self.meta_progress.configure(value=pct))
-            self.after(0, lambda: self._append_meta_log(f"[{phase}] {pct:.0f}%"))
+        # Initialize and run
+        loop = MetaLearningLoop(training_config)
         
-        loop.run(progress_callback=progress_callback)
+        # Run with progress callbacks
+        def progress_callback(current: int, total: int, message: str):
+            pct = (current / max(total, 1)) * 100.0
+            self.after(0, lambda value=pct: self.meta_progress.configure(value=value))
+            post_log(f"[{current}/{max(total, 1)}] {message}")
+        
+        summary = loop.run(progress_callback=progress_callback)
+        dump_json(run_dir / "run_summary.json", summary)
         
         # Write summary
         summary_file = run_dir / "summary.txt"
@@ -856,10 +909,17 @@ class GameLearningApp(tk.Tk):
             f.write(f"Acquisition rounds: {config['acq_rounds']}\n")
             f.write(f"Consolidation budget: {config['cons_budget']}\n")
             f.write(f"Test games: {config['test_games']}\n")
+            f.write(f"Game family: {config['game_family']}\n")
+            f.write(f"Consolidation strategy: {config['consolidation_strategy']}\n")
+            f.write(f"Seed: {seed}\n")
+            f.write(f"Target compression: {target_compression:.2f}\n")
             f.write(f"{'='*60}\n")
             f.write(f"Run completed successfully.\n")
+            f.write(f"Total games seen: {summary['total_games_seen']}\n")
+            f.write(f"Total episodes: {summary['total_episodes']}\n")
+            f.write(f"Skills learned: {summary['skill_memory_stats'].get('total_skills', 0)}\n")
         
-        self._append_meta_log(f"✓ Run complete. Summary saved to {summary_file}")
+        post_log(f"Run complete. Summary saved to {summary_file}")
     
     def _run_inference(self, config: dict) -> None:
         """Execute an inference run on a specific target N."""
