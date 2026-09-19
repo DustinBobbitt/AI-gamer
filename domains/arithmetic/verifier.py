@@ -159,7 +159,7 @@ def verify_factors_adaptively(
     N: int,
     belief: BeliefState,
     max_checks: int = 100000,
-    fermat_budget: int = 512,
+    fermat_budget: int = 128,
 ) -> VerificationResult:
     """Verify with a cost-aware portfolio of complementary strategies.
 
