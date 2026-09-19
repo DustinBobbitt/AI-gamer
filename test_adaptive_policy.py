@@ -124,6 +124,19 @@ class AdaptiveInferencePolicyTests(unittest.TestCase):
             loaded = GeometryPriorPolicy.load(path)
         self.assertEqual(loaded, policy)
 
+    def test_exact_square_evidence_is_assumption_gated(self) -> None:
+        policy = GeometryPriorPolicy.load()
+        square = 101 * 101
+
+        allowed = policy.predict(square, assume_semiprime=True, allow_square=True)
+        disallowed = policy.predict(square, assume_semiprime=True, allow_square=False)
+
+        self.assertEqual(allowed.label, "balanced")
+        self.assertGreater(allowed.probabilities["balanced"], 0.99)
+        self.assertIn("exact_square_under_semiprime_assumption", allowed.evidence)
+        self.assertEqual(disallowed.label, "indeterminate")
+        self.assertIn("conflicts", disallowed.evidence[0])
+
 
 if __name__ == "__main__":
     unittest.main()

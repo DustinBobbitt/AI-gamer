@@ -969,7 +969,9 @@ class GameLearningApp(tk.Tk):
             'disable_early_stop': disable_early_stop,
             'convergence_threshold': config["limits"]["epsilon"],
             'bit_length': target_n.bit_length(),
-            'distribution_type': 'unknown'  # User-provided N
+            'distribution_type': 'unknown',  # User-provided N
+            'assume_semiprime': config["assumptions"]["is_semiprime"],
+            'allow_square': config["assumptions"]["allow_square"],
         })
         
         self._append_inference_log(f"Running inference on N = {target_n}")

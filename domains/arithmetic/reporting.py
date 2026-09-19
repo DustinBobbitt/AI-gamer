@@ -49,6 +49,7 @@ class InferenceSummary:
     geometry_label: Optional[str] = None
     geometry_confidence: Optional[float] = None
     geometry_model_hash: Optional[str] = None
+    geometry_evidence: Optional[List[str]] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary."""
@@ -192,6 +193,8 @@ def generate_interpretation(summary: InferenceSummary) -> List[str]:
             lines.append(
                 "Available factor-blind evidence does not distinguish the geometry regimes."
             )
+        if summary.geometry_evidence:
+            lines.append(f"Geometry evidence: {', '.join(summary.geometry_evidence)}.")
     else:
         lines.append("Calibrated factor-geometry data is unavailable.")
 

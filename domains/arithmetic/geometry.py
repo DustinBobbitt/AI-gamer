@@ -49,6 +49,7 @@ class FactorGeometryPrediction:
     label: str
     confidence: float
     model_manifest_hash: str
+    evidence: Tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -62,20 +63,45 @@ class GeometryPriorPolicy:
     validation_manifest_hash: str
     schema_version: int = SCHEMA_VERSION
 
-    def predict(self, target_n: int) -> FactorGeometryPrediction:
+    def predict(
+        self,
+        target_n: int,
+        assume_semiprime: bool = True,
+        allow_square: bool = False,
+    ) -> FactorGeometryPrediction:
         bits = target_n.bit_length()
         bucket = next(
             (item for item in sorted(self.buckets, key=lambda item: item.max_bits) if bits <= item.max_bits),
             self.buckets[-1],
         )
+        root = math.isqrt(target_n)
+        is_exact_square = root * root == target_n
+        if is_exact_square and assume_semiprime and allow_square:
+            probabilities = {
+                "balanced": 0.998,
+                "intermediate": 0.001,
+                "skewed": 0.001,
+            }
+            return FactorGeometryPrediction(
+                probabilities=probabilities,
+                label="balanced",
+                confidence=probabilities["balanced"],
+                model_manifest_hash=self.train_manifest_hash,
+                evidence=("exact_square_under_semiprime_assumption",),
+            )
+
         best = max(bucket.probabilities, key=bucket.probabilities.get)
         ordered = sorted(bucket.probabilities.values(), reverse=True)
         label = "indeterminate" if ordered[0] - ordered[1] < 0.10 else best
+        evidence = ()
+        if is_exact_square and assume_semiprime and not allow_square:
+            evidence = ("exact_square_conflicts_with_p_not_equal_q_assumption",)
         return FactorGeometryPrediction(
             probabilities=dict(bucket.probabilities),
             label=label,
             confidence=ordered[0],
             model_manifest_hash=self.train_manifest_hash,
+            evidence=evidence,
         )
 
     def to_dict(self) -> Dict[str, object]:

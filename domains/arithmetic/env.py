@@ -36,6 +36,8 @@ class SemiprimeInferenceEnv(DomainTask):
         self.min_steps = config.get('min_steps', 0) if config else 0
         self.disable_early_stop = config.get('disable_early_stop', False) if config else False
         self.convergence_threshold = config.get('convergence_threshold', 0.001) if config else 0.001
+        self.assume_semiprime = config.get('assume_semiprime', True) if config else True
+        self.allow_square = config.get('allow_square', False) if config else False
         
         # Current episode state
         self.current_N: Optional[int] = None
@@ -365,7 +367,11 @@ Near Square: {self.belief_state.near_square_score:.3f}
         geometry_prediction = None
         try:
             from domains.arithmetic.geometry import GeometryPriorPolicy
-            geometry_prediction = GeometryPriorPolicy.load().predict(self.current_N)
+            geometry_prediction = GeometryPriorPolicy.load().predict(
+                self.current_N,
+                assume_semiprime=self.assume_semiprime,
+                allow_square=self.allow_square,
+            )
         except (OSError, ValueError, KeyError):
             pass
         
@@ -397,6 +403,9 @@ Near Square: {self.belief_state.near_square_score:.3f}
             ),
             geometry_model_hash=(
                 geometry_prediction.model_manifest_hash if geometry_prediction else None
+            ),
+            geometry_evidence=(
+                list(geometry_prediction.evidence) if geometry_prediction else None
             ),
         )
         
