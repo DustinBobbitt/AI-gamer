@@ -16,7 +16,7 @@ import time
 import math
 from typing import Optional, Tuple
 from domains.arithmetic.state import BeliefState
-from domains.arithmetic.reporting import VerificationResult
+from domains.arithmetic.reporting import VerificationResult, compute_adaptive_window
 
 
 def verify_factors_from_belief(
@@ -48,24 +48,13 @@ def verify_factors_from_belief(
             skip_reason="Invalid size ratio estimate from belief state"
         )
     
-    # Compute search window based on belief
-    sqrt_n = math.sqrt(N)
-    
-    if belief.near_square_score > 0.7:  # High near-square score
-        # Search around sqrt(N)
-        window_low = int(sqrt_n * 0.95)
-        window_high = int(sqrt_n * 1.05)
-    else:  # Skewed factors
-        # Use size ratio to estimate smaller factor range
-        estimated_small = sqrt_n * belief.size_ratio_estimate
-        window_low = int(estimated_small * 0.8)
-        window_high = int(estimated_small * 1.2)
-    
-    # Ensure odd candidates only
-    if window_low % 2 == 0:
-        window_low += 1
-    if window_high % 2 == 0:
-        window_high -= 1
+    # Use the same window shown in summaries and run cards. Keeping one source
+    # of truth prevents the verifier from searching a narrower, hidden range.
+    window_low, window_high = compute_adaptive_window(
+        N,
+        belief.near_square_score,
+        assume_odd=True,
+    )
     
     window_width = (window_high - window_low) // 2 + 1
     
