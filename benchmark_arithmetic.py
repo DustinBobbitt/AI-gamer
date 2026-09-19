@@ -18,6 +18,7 @@ from domains.arithmetic.policy import AdaptiveInferencePolicy
 from domains.arithmetic.scenarios import ScenarioGenerator, SemiprimeScenario
 from domains.arithmetic.state import BeliefState
 from domains.arithmetic.verifier import verify_factors_adaptively, verify_factors_from_belief
+from domains.arithmetic.verifier_policy import VerifierBudgetPolicy
 
 
 @dataclass(frozen=True)
@@ -112,6 +113,13 @@ def run_episode(
         verification = verify_factors_from_belief(scenario.N, env.belief_state)
     elif verifier_name == "portfolio":
         verification = verify_factors_adaptively(scenario.N, env.belief_state)
+    elif verifier_name == "learned":
+        policy = VerifierBudgetPolicy.load()
+        verification = verify_factors_adaptively(
+            scenario.N,
+            env.belief_state,
+            fermat_budget=policy.budget_for(scenario.N),
+        )
     else:
         raise ValueError(f"Unknown verifier: {verifier_name}")
     summary = env.generate_inference_summary()
@@ -178,7 +186,7 @@ def run_benchmark(
         run_episode(scenario, policy_name, seed + index, verifier_name)
         for index, scenario in enumerate(scenarios)
         for policy_name in ("random", "fixed", "adaptive")
-        for verifier_name in ("window", "portfolio")
+        for verifier_name in ("window", "portfolio", "learned")
     ]
     return {
         "hypothesis": (

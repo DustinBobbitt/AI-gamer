@@ -941,6 +941,7 @@ class GameLearningApp(tk.Tk):
         
         from domains.arithmetic.env import SemiprimeInferenceEnv
         from domains.arithmetic.verifier import verify_factors_adaptively, run_baseline_fermat, run_baseline_trial_division
+        from domains.arithmetic.verifier_policy import VerifierBudgetPolicy
         from domains.arithmetic.reporting import write_summary_txt, write_run_card_txt, VerificationResult, BaselineComparison
         
         # Create output directory
@@ -1072,8 +1073,31 @@ class GameLearningApp(tk.Tk):
         # Optional verification
         verification = None
         if config['options'].get('verify_factors', True):
-            self._append_inference_log("Running post-inference verification...")
-            verification = verify_factors_adaptively(target_n, env.belief_state, max_checks=100000)
+            try:
+                verifier_policy = VerifierBudgetPolicy.load()
+                fermat_budget = verifier_policy.budget_for(target_n)
+                config["verification_policy"] = {
+                    "schema_version": verifier_policy.schema_version,
+                    "fermat_budget": fermat_budget,
+                    "train_manifest_hash": verifier_policy.train_manifest_hash,
+                    "validation_manifest_hash": verifier_policy.validation_manifest_hash,
+                }
+                with open(config_file, "w", encoding="utf-8") as f:
+                    json.dump(config, f, indent=2)
+                self._append_inference_log(
+                    f"Running learned verifier policy (Fermat budget: {fermat_budget})..."
+                )
+            except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
+                fermat_budget = 128
+                self._append_inference_log(
+                    f"Verifier policy unavailable; using validated fallback budget 128 ({exc})"
+                )
+            verification = verify_factors_adaptively(
+                target_n,
+                env.belief_state,
+                max_checks=100000,
+                fermat_budget=fermat_budget,
+            )
             
             if verification.verifier_skipped:
                 self._append_inference_log(f"  Verifier skipped: {verification.skip_reason}")

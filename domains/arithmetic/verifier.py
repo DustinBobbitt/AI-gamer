@@ -198,7 +198,7 @@ def verify_factors_adaptively(
         )
 
     # Balanced-factor hypothesis: bounded Fermat probes are cheap when p ≈ q.
-    trace.append("fermat_probe")
+    trace.append(f"fermat_probe[budget={fermat_budget}]")
     a = math.isqrt(N)
     if a * a < N:
         a += 1
