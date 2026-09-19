@@ -4,7 +4,7 @@ import unittest
 from domains.arithmetic.env import SemiprimeInferenceEnv
 from domains.arithmetic.policy import AdaptiveInferencePolicy
 from domains.arithmetic.state import BeliefState
-from domains.arithmetic.verifier import verify_factors_from_belief
+from domains.arithmetic.verifier import verify_factors_adaptively, verify_factors_from_belief
 
 
 def initialized_env(target_n: int, **config) -> SemiprimeInferenceEnv:
@@ -52,6 +52,15 @@ class AdaptiveInferencePolicyTests(unittest.TestCase):
 
         self.assertTrue(result.factors_found)
         self.assertEqual((result.p, result.q), (7, 11))
+
+    def test_adaptive_verifier_handles_balanced_and_skewed_factors(self) -> None:
+        balanced = verify_factors_adaptively(1009 * 1013, BeliefState())
+        skewed = verify_factors_adaptively(13 * 1009, BeliefState())
+
+        self.assertEqual((balanced.p, balanced.q), (1009, 1013))
+        self.assertEqual(balanced.strategy_used, "fermat_probe")
+        self.assertEqual((skewed.p, skewed.q), (13, 1009))
+        self.assertEqual(skewed.strategy_used, "low_factor_band")
 
 
 if __name__ == "__main__":

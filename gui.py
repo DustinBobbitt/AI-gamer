@@ -940,7 +940,7 @@ class GameLearningApp(tk.Tk):
             return
         
         from domains.arithmetic.env import SemiprimeInferenceEnv
-        from domains.arithmetic.verifier import verify_factors_from_belief, run_baseline_fermat, run_baseline_trial_division
+        from domains.arithmetic.verifier import verify_factors_adaptively, run_baseline_fermat, run_baseline_trial_division
         from domains.arithmetic.reporting import write_summary_txt, write_run_card_txt, VerificationResult, BaselineComparison
         
         # Create output directory
@@ -1073,7 +1073,7 @@ class GameLearningApp(tk.Tk):
         verification = None
         if config['options'].get('verify_factors', True):
             self._append_inference_log("Running post-inference verification...")
-            verification = verify_factors_from_belief(target_n, env.belief_state, max_checks=100000)
+            verification = verify_factors_adaptively(target_n, env.belief_state, max_checks=100000)
             
             if verification.verifier_skipped:
                 self._append_inference_log(f"  Verifier skipped: {verification.skip_reason}")
@@ -1081,6 +1081,7 @@ class GameLearningApp(tk.Tk):
                 self._append_inference_log(f"  ✓ Factors found: {verification.p} × {verification.q}")
                 self._append_inference_log(f"  Checks attempted: {verification.checks_attempted}")
                 self._append_inference_log(f"  Time: {verification.time_ms:.2f} ms")
+                self._append_inference_log(f"  Strategy: {verification.strategy_used}")
             else:
                 self._append_inference_log(f"  No factors found in window (width: {verification.window_width})")
                 self._append_inference_log(f"  Checks attempted: {verification.checks_attempted}")

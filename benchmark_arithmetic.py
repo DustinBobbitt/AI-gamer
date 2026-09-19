@@ -17,12 +17,13 @@ from domains.arithmetic.env import SemiprimeInferenceEnv
 from domains.arithmetic.policy import AdaptiveInferencePolicy
 from domains.arithmetic.scenarios import ScenarioGenerator, SemiprimeScenario
 from domains.arithmetic.state import BeliefState
-from domains.arithmetic.verifier import verify_factors_from_belief
+from domains.arithmetic.verifier import verify_factors_adaptively, verify_factors_from_belief
 
 
 @dataclass(frozen=True)
 class EpisodeResult:
     policy: str
+    verifier: str
     distribution: str
     bit_length: int
     steps: int
@@ -85,6 +86,7 @@ def run_episode(
     scenario: SemiprimeScenario,
     policy_name: str,
     seed: int,
+    verifier_name: str = "window",
     max_steps: int = 50,
 ) -> EpisodeResult:
     """Run one factor-blind episode and evaluate it against hidden truth."""
@@ -106,11 +108,17 @@ def run_episode(
             break
         _, _, done, _ = env.step(action)
 
-    verification = verify_factors_from_belief(scenario.N, env.belief_state)
+    if verifier_name == "window":
+        verification = verify_factors_from_belief(scenario.N, env.belief_state)
+    elif verifier_name == "portfolio":
+        verification = verify_factors_adaptively(scenario.N, env.belief_state)
+    else:
+        raise ValueError(f"Unknown verifier: {verifier_name}")
     summary = env.generate_inference_summary()
     true_ratio = scenario.p / scenario.q
     return EpisodeResult(
         policy=policy_name,
+        verifier=verifier_name,
         distribution=scenario.distribution_type.value,
         bit_length=scenario.bit_length,
         steps=env.step_count,
@@ -141,9 +149,9 @@ def generate_held_out_scenarios(
 def summarize(results: List[EpisodeResult]) -> Dict[str, Dict[str, float]]:
     groups: Dict[str, List[EpisodeResult]] = {}
     for result in results:
-        key = f"{result.policy}:{result.distribution}"
+        key = f"{result.policy}:{result.verifier}:{result.distribution}"
         groups.setdefault(key, []).append(result)
-        groups.setdefault(f"{result.policy}:all", []).append(result)
+        groups.setdefault(f"{result.policy}:{result.verifier}:all", []).append(result)
 
     return {
         key: {
@@ -167,9 +175,10 @@ def run_benchmark(
 ) -> Dict[str, object]:
     scenarios = generate_held_out_scenarios(seed, count_per_group, bit_lengths)
     results = [
-        run_episode(scenario, policy_name, seed + index)
+        run_episode(scenario, policy_name, seed + index, verifier_name)
         for index, scenario in enumerate(scenarios)
         for policy_name in ("random", "fixed", "adaptive")
+        for verifier_name in ("window", "portfolio")
     ]
     return {
         "hypothesis": (

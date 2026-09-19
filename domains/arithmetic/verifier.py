@@ -155,6 +155,104 @@ def verify_factors_from_belief(
     )
 
 
+def verify_factors_adaptively(
+    N: int,
+    belief: BeliefState,
+    max_checks: int = 100000,
+    fermat_budget: int = 512,
+) -> VerificationResult:
+    """Verify with a cost-aware portfolio of complementary strategies.
+
+    The portfolio is deliberately outside the inference environment. It first
+    tries bounded Fermat checks for balanced factors, then a bounded low-factor
+    search for skewed factors, and finally the inferred belief window. The
+    trace makes every search decision and its cost visible.
+    """
+    start_time = time.perf_counter()
+    checks = 0
+    trace = []
+
+    if N <= 1 or N % 2 == 0:
+        return VerificationResult(
+            factors_found=False,
+            verifier_skipped=True,
+            skip_reason="Adaptive verifier currently requires odd N > 1",
+            strategy_used="adaptive_portfolio",
+            strategy_trace=trace,
+        )
+
+    def success(candidate: int, strategy: str) -> Optional[VerificationResult]:
+        from utils.primes import is_prime
+
+        other = N // candidate
+        if candidate < 2 or other < 2 or not is_prime(candidate) or not is_prime(other):
+            return None
+        return VerificationResult(
+            factors_found=True,
+            p=min(candidate, other),
+            q=max(candidate, other),
+            checks_attempted=checks,
+            time_ms=(time.perf_counter() - start_time) * 1000,
+            strategy_used=strategy,
+            strategy_trace=trace.copy(),
+        )
+
+    # Balanced-factor hypothesis: bounded Fermat probes are cheap when p ≈ q.
+    trace.append("fermat_probe")
+    a = math.isqrt(N)
+    if a * a < N:
+        a += 1
+    for _ in range(min(fermat_budget, max_checks - checks)):
+        checks += 1
+        b_squared = a * a - N
+        b = math.isqrt(b_squared)
+        if b * b == b_squared:
+            result = success(a - b, "fermat_probe")
+            if result:
+                return result
+        a += 1
+
+    # Skewed-factor hypothesis: search only the generator-independent low
+    # quarter-bit band, rather than pretending the near-square score identifies
+    # factor balance.
+    trace.append("low_factor_band")
+    sqrt_n = math.isqrt(N)
+    low_factor_high = min(sqrt_n, 1 << min(16, max(3, N.bit_length() // 4 + 1)))
+    for candidate in range(3, low_factor_high + 1, 2):
+        if checks >= max_checks:
+            break
+        checks += 1
+        if N % candidate == 0:
+            result = success(candidate, "low_factor_band")
+            if result:
+                return result
+
+    # Preserve the belief-guided path for medium cases not covered above.
+    trace.append("belief_window")
+    if checks < max_checks:
+        window_result = verify_factors_from_belief(
+            N,
+            belief,
+            max_checks=max_checks - checks,
+        )
+        checks += window_result.checks_attempted
+        if window_result.factors_found:
+            window_result.checks_attempted = checks
+            window_result.time_ms = (time.perf_counter() - start_time) * 1000
+            window_result.strategy_used = "belief_window"
+            window_result.strategy_trace = trace.copy()
+            return window_result
+
+    return VerificationResult(
+        factors_found=False,
+        checks_attempted=checks,
+        time_ms=(time.perf_counter() - start_time) * 1000,
+        failure_reason="adaptive verifier exhausted its bounded strategy portfolio",
+        strategy_used="adaptive_portfolio",
+        strategy_trace=trace,
+    )
+
+
 def run_baseline_fermat(N: int, max_iterations: int = 10000) -> Tuple[bool, Optional[int], Optional[int], int, float]:
     """
     Baseline comparison: Fermat's method for near-square semiprimes.

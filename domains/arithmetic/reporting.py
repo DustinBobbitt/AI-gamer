@@ -124,6 +124,8 @@ class VerificationResult:
     verifier_skipped: bool = False
     skip_reason: Optional[str] = None
     failure_reason: Optional[str] = None  # Why verification failed (e.g., "only trivial factorization")
+    strategy_used: Optional[str] = None
+    strategy_trace: Optional[List[str]] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary."""
@@ -351,6 +353,10 @@ def build_inference_summary_text(summary: InferenceSummary,
             lines.append(f"Window width: {verification.window_width}")
             lines.append(f"Checks attempted: {verification.checks_attempted}")
             lines.append(f"Time: {verification.time_ms:.2f} ms")
+            if verification.strategy_used:
+                lines.append(f"Strategy: {verification.strategy_used}")
+            if verification.strategy_trace:
+                lines.append(f"Strategy trace: {' → '.join(verification.strategy_trace)}")
         lines.append("")
     
     # Baseline (if available)
@@ -447,6 +453,8 @@ def build_inference_run_card_text(summary: InferenceSummary,
             elif not verification.factors_found and verification.failure_reason:
                 lines.append(f"Reason: {verification.failure_reason}")
             lines.append(f"Window width: {verification.window_width}, Checks: {verification.checks_attempted}, Time: {verification.time_ms:.2f} ms")
+            if verification.strategy_used:
+                lines.append(f"Strategy: {verification.strategy_used}")
         lines.append("")
     
     # Baseline (if available)
