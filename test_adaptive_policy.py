@@ -137,6 +137,18 @@ class AdaptiveInferencePolicyTests(unittest.TestCase):
         self.assertEqual(disallowed.label, "indeterminate")
         self.assertIn("conflicts", disallowed.evidence[0])
 
+    def test_adaptive_verifier_covers_intermediate_geometry(self) -> None:
+        scenario = ScenarioGenerator(2026).generate_intermediate(44)
+        result = verify_factors_adaptively(
+            scenario.N,
+            BeliefState(),
+            fermat_budget=128,
+        )
+
+        self.assertTrue(result.factors_found)
+        self.assertEqual((result.p, result.q), (scenario.p, scenario.q))
+        self.assertEqual(result.strategy_used, "pollard_rho")
+
 
 if __name__ == "__main__":
     unittest.main()

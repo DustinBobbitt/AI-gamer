@@ -227,6 +227,29 @@ def verify_factors_adaptively(
             if result:
                 return result
 
+    # General semiprime hypothesis: bounded deterministic Pollard-Rho fills the
+    # gap between near-square and explicitly low-factor structures.
+    trace.append("pollard_rho")
+    for constant in (1, 3, 5, 7, 11):
+        if checks >= max_checks:
+            break
+        x = 2
+        y = 2
+        while checks < max_checks:
+            x = (x * x + constant) % N
+            y = (y * y + constant) % N
+            y = (y * y + constant) % N
+            checks += 1
+            divisor = math.gcd(abs(x - y), N)
+            if divisor == 1:
+                continue
+            if divisor == N:
+                break
+            result = success(divisor, "pollard_rho")
+            if result:
+                return result
+            break
+
     # Preserve the belief-guided path for medium cases not covered above.
     trace.append("belief_window")
     if checks < max_checks:
