@@ -1,11 +1,17 @@
 """Tests for state-aware arithmetic transform selection."""
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from domains.arithmetic.env import SemiprimeInferenceEnv
 from domains.arithmetic.policy import AdaptiveInferencePolicy
 from domains.arithmetic.state import BeliefState
 from domains.arithmetic.transforms import NearSquareUpdate
 from domains.arithmetic.verifier import verify_factors_adaptively, verify_factors_from_belief
+from domains.arithmetic.verifier_policy import (
+    VerifierBudgetPolicy,
+    train_verifier_budget_policy,
+)
 from utils.primes import is_prime
 
 
@@ -72,6 +78,23 @@ class AdaptiveInferencePolicyTests(unittest.TestCase):
     def test_primality_check_is_deterministic_through_64_bits(self) -> None:
         self.assertTrue(is_prime((1 << 61) - 1))
         self.assertFalse(is_prime(341550071728321))
+
+    def test_trained_verifier_policy_round_trips_with_provenance(self) -> None:
+        policy = train_verifier_budget_policy(
+            bit_lengths=(16,),
+            count_per_distribution=3,
+            candidate_budgets=(0, 16, 128),
+            minimum_success=0.5,
+        )
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "policy.json"
+            policy.save(path)
+            loaded = VerifierBudgetPolicy.load(path)
+
+        self.assertEqual(loaded, policy)
+        self.assertEqual(len(loaded.train_manifest_hash), 64)
+        self.assertEqual(len(loaded.validation_manifest_hash), 64)
+        self.assertGreaterEqual(loaded.budget_for(77), 0)
 
 
 if __name__ == "__main__":
