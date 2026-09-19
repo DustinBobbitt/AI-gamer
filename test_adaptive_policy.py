@@ -4,7 +4,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from domains.arithmetic.env import SemiprimeInferenceEnv
+from domains.arithmetic.geometry import GeometryPriorPolicy, train_geometry_prior_policy
 from domains.arithmetic.policy import AdaptiveInferencePolicy
+from domains.arithmetic.scenarios import ScenarioGenerator
 from domains.arithmetic.state import BeliefState
 from domains.arithmetic.transforms import NearSquareUpdate
 from domains.arithmetic.verifier import verify_factors_adaptively, verify_factors_from_belief
@@ -95,6 +97,32 @@ class AdaptiveInferencePolicyTests(unittest.TestCase):
         self.assertEqual(len(loaded.train_manifest_hash), 64)
         self.assertEqual(len(loaded.validation_manifest_hash), 64)
         self.assertGreaterEqual(loaded.budget_for(77), 0)
+
+    def test_geometry_policy_is_calibrated_better_than_square_gap(self) -> None:
+        intermediate = ScenarioGenerator(7).generate_intermediate(16)
+        ratio = intermediate.q / intermediate.p
+        self.assertGreaterEqual(ratio, 2.0)
+        self.assertLessEqual(ratio, 8.0)
+
+        policy = train_geometry_prior_policy(
+            bit_lengths=(16,),
+            count_per_regime=5,
+        )
+        bucket = policy.buckets[0]
+        self.assertLess(
+            bucket.validation_metrics.negative_log_likelihood,
+            bucket.legacy_metrics.negative_log_likelihood,
+        )
+        self.assertLess(
+            bucket.validation_metrics.brier_score,
+            bucket.legacy_metrics.brier_score,
+        )
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "geometry.json"
+            policy.save(path)
+            loaded = GeometryPriorPolicy.load(path)
+        self.assertEqual(loaded, policy)
 
 
 if __name__ == "__main__":
