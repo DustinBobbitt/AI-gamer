@@ -235,7 +235,7 @@ class GameLearningApp(tk.Tk):
         )
         
         self.use_learned_policy_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(assumptions_frame, text="Use learned policy", variable=self.use_learned_policy_var,
+        ttk.Checkbutton(assumptions_frame, text="Use adaptive policy", variable=self.use_learned_policy_var,
                        command=self._on_policy_toggle).grid(
             row=0, column=1, sticky=tk.W, padx=5, pady=2
         )
@@ -676,7 +676,7 @@ class GameLearningApp(tk.Tk):
                 "is_semiprime": self.assume_semiprime_var.get(),
                 "allow_square": self.allow_square_var.get()
             },
-            "policy": "learned" if self.use_learned_policy_var.get() else "baseline",
+            "policy": "adaptive" if self.use_learned_policy_var.get() else "baseline",
             "limits": {
                 "max_steps": int(self.max_steps_var.get() or "200"),
                 "min_steps": int(self.min_steps_var.get() or "0"),
@@ -966,6 +966,7 @@ class GameLearningApp(tk.Tk):
             'max_steps': max_steps,
             'min_steps': min_steps,
             'disable_early_stop': disable_early_stop,
+            'convergence_threshold': config["limits"]["epsilon"],
             'bit_length': target_n.bit_length(),
             'distribution_type': 'unknown'  # User-provided N
         })
@@ -993,10 +994,30 @@ class GameLearningApp(tk.Tk):
         # Run inference loop
         done = False
         step = 0
+        adaptive_policy = None
+        if config["policy"] == "adaptive":
+            from domains.arithmetic.policy import AdaptiveInferencePolicy
+            adaptive_policy = AdaptiveInferencePolicy(
+                min_progress=config["limits"]["epsilon"]
+            )
         
         while not done and step < max_steps:
-            # Simple random policy (TODO: integrate with Brain)
-            action = random.randint(0, len(env.get_action_space()) - 1)
+            if adaptive_policy is not None:
+                action = adaptive_policy.select_action(env.belief_state, target_n)
+                if action is None:
+                    if disable_early_stop or step < min_steps:
+                        action = step % len(env.get_action_space())
+                    else:
+                        env.finish("policy_complete")
+                        self.after(
+                            0,
+                            lambda: self._append_inference_log(
+                                "Adaptive policy stopped: no transform can improve the belief state."
+                            ),
+                        )
+                        break
+            else:
+                action = random.randint(0, len(env.get_action_space()) - 1)
             
             obs, reward, done, info = env.step(action)
             step += 1

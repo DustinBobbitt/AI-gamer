@@ -35,6 +35,7 @@ class SemiprimeInferenceEnv(DomainTask):
         self.distribution_type = config.get('distribution_type', 'mixed') if config else 'mixed'
         self.min_steps = config.get('min_steps', 0) if config else 0
         self.disable_early_stop = config.get('disable_early_stop', False) if config else False
+        self.convergence_threshold = config.get('convergence_threshold', 0.001) if config else 0.001
         
         # Current episode state
         self.current_N: Optional[int] = None
@@ -56,7 +57,6 @@ class SemiprimeInferenceEnv(DomainTask):
         
         # Termination tracking
         self.termination_reason: str = ""
-        self.convergence_threshold: float = 0.001  # Entropy change threshold
         self.convergence_window: int = 5  # Steps to check for convergence
         self.entropy_start: float = 0.0
     
@@ -214,6 +214,10 @@ class SemiprimeInferenceEnv(DomainTask):
                     return True, "policy_stalled"
         
         return False, ""
+
+    def finish(self, reason: str = "policy_complete") -> None:
+        """Finish an episode when the policy has no useful transforms left."""
+        self.termination_reason = reason
     
     def _compute_info(self) -> Dict[str, Any]:
         """Compute evaluation metrics using ground truth (for reporting only)."""

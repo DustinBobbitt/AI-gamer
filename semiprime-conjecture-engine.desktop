@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Semiprime Conjecture Engine
+Comment=Launch constraint discovery and semiprime inference
+Exec=/workspace/launch.sh
+Path=/workspace
+Icon=applications-science
+Terminal=false
+Categories=Education;Science;
+StartupNotify=true
