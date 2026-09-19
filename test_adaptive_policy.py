@@ -4,7 +4,9 @@ import unittest
 from domains.arithmetic.env import SemiprimeInferenceEnv
 from domains.arithmetic.policy import AdaptiveInferencePolicy
 from domains.arithmetic.state import BeliefState
+from domains.arithmetic.transforms import NearSquareUpdate
 from domains.arithmetic.verifier import verify_factors_adaptively, verify_factors_from_belief
+from utils.primes import is_prime
 
 
 def initialized_env(target_n: int, **config) -> SemiprimeInferenceEnv:
@@ -61,6 +63,15 @@ class AdaptiveInferencePolicyTests(unittest.TestCase):
         self.assertEqual(balanced.strategy_used, "fermat_probe")
         self.assertEqual((skewed.p, skewed.q), (13, 65537))
         self.assertEqual(skewed.strategy_used, "low_factor_band")
+
+    def test_square_gap_transform_supports_arbitrary_size_integers(self) -> None:
+        result = NearSquareUpdate().apply(BeliefState(), (1 << 127) - 1)
+        self.assertGreaterEqual(result.new_state.near_square_score, 0.0)
+        self.assertLessEqual(result.new_state.near_square_score, 1.0)
+
+    def test_primality_check_is_deterministic_through_64_bits(self) -> None:
+        self.assertTrue(is_prime((1 << 61) - 1))
+        self.assertFalse(is_prime(341550071728321))
 
 
 if __name__ == "__main__":

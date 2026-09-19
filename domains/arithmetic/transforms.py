@@ -6,6 +6,7 @@ They are constraint-based updates to the belief state.
 """
 from __future__ import annotations
 
+import math
 import numpy as np
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -101,7 +102,8 @@ class NearSquareUpdate(Transform):
         )
         
         # Compute distance from nearest perfect square
-        sqrt_n = int(np.ceil(np.sqrt(N)))
+        sqrt_floor = math.isqrt(N)
+        sqrt_n = sqrt_floor if sqrt_floor * sqrt_floor == N else sqrt_floor + 1
         distance = abs(sqrt_n * sqrt_n - N)
         relative_distance = distance / N
         
