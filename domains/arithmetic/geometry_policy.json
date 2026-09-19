@@ -1,0 +1,109 @@
+{
+  "buckets": [
+    {
+      "max_bits": 16,
+      "probabilities": {
+        "balanced": 0.3333333333333333,
+        "intermediate": 0.3333333333333333,
+        "skewed": 0.3333333333333333
+      },
+      "validation_metrics": {
+        "negative_log_likelihood": 1.0986122886681098,
+        "brier_score": 0.6666666666666667,
+        "accuracy": 0.3333333333333333,
+        "episodes": 300
+      },
+      "legacy_metrics": {
+        "negative_log_likelihood": 2.830232383339797,
+        "brier_score": 1.2565462961426612,
+        "accuracy": 0.3333333333333333,
+        "episodes": 300
+      }
+    },
+    {
+      "max_bits": 24,
+      "probabilities": {
+        "balanced": 0.3333333333333333,
+        "intermediate": 0.3333333333333333,
+        "skewed": 0.3333333333333333
+      },
+      "validation_metrics": {
+        "negative_log_likelihood": 1.0986122886681098,
+        "brier_score": 0.6666666666666667,
+        "accuracy": 0.3333333333333333,
+        "episodes": 300
+      },
+      "legacy_metrics": {
+        "negative_log_likelihood": 4.347684725545008,
+        "brier_score": 1.3270010606553146,
+        "accuracy": 0.3333333333333333,
+        "episodes": 300
+      }
+    },
+    {
+      "max_bits": 32,
+      "probabilities": {
+        "balanced": 0.3333333333333333,
+        "intermediate": 0.3333333333333333,
+        "skewed": 0.3333333333333333
+      },
+      "validation_metrics": {
+        "negative_log_likelihood": 1.0986122886681098,
+        "brier_score": 0.6666666666666667,
+        "accuracy": 0.3333333333333333,
+        "episodes": 300
+      },
+      "legacy_metrics": {
+        "negative_log_likelihood": 4.605837520211648,
+        "brier_score": 1.3293393333333332,
+        "accuracy": 0.3333333333333333,
+        "episodes": 300
+      }
+    },
+    {
+      "max_bits": 40,
+      "probabilities": {
+        "balanced": 0.3333333333333333,
+        "intermediate": 0.3333333333333333,
+        "skewed": 0.3333333333333333
+      },
+      "validation_metrics": {
+        "negative_log_likelihood": 1.0986122886681098,
+        "brier_score": 0.6666666666666667,
+        "accuracy": 0.3333333333333333,
+        "episodes": 300
+      },
+      "legacy_metrics": {
+        "negative_log_likelihood": 4.605837520211648,
+        "brier_score": 1.3293393333333332,
+        "accuracy": 0.3333333333333333,
+        "episodes": 300
+      }
+    },
+    {
+      "max_bits": 48,
+      "probabilities": {
+        "balanced": 0.3333333333333333,
+        "intermediate": 0.3333333333333333,
+        "skewed": 0.3333333333333333
+      },
+      "validation_metrics": {
+        "negative_log_likelihood": 1.0986122886681098,
+        "brier_score": 0.6666666666666667,
+        "accuracy": 0.3333333333333333,
+        "episodes": 300
+      },
+      "legacy_metrics": {
+        "negative_log_likelihood": 4.605837520211648,
+        "brier_score": 1.3293393333333332,
+        "accuracy": 0.3333333333333333,
+        "episodes": 300
+      }
+    }
+  ],
+  "training_seed": 20260919,
+  "validation_seed": 271828,
+  "train_manifest_hash": "a13c1a88a595465a7f7a3808573d474efa2d90b4ba759615e2e95a57dcea7bbc",
+  "validation_manifest_hash": "5aefaa8a2e6b752de188214564b536c0b8430a6782f29470bcd2d506388fdc40",
+  "schema_version": 1
+}

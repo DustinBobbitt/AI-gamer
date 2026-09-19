@@ -361,6 +361,13 @@ Near Square: {self.belief_state.near_square_score:.3f}
             self.belief_state.near_square_score,
             assume_odd=True  # Default assumption
         )
+
+        geometry_prediction = None
+        try:
+            from domains.arithmetic.geometry import GeometryPriorPolicy
+            geometry_prediction = GeometryPriorPolicy.load().predict(self.current_N)
+        except (OSError, ValueError, KeyError):
+            pass
         
         # Create summary
         summary = InferenceSummary(
@@ -380,7 +387,17 @@ Near Square: {self.belief_state.near_square_score:.3f}
             bit_length=self.current_N.bit_length() if self.current_N else 0,
             max_steps=self.max_steps,
             min_steps=self.min_steps,
-            early_stop_enabled=not self.disable_early_stop
+            early_stop_enabled=not self.disable_early_stop,
+            geometry_probabilities=(
+                geometry_prediction.probabilities if geometry_prediction else None
+            ),
+            geometry_label=geometry_prediction.label if geometry_prediction else None,
+            geometry_confidence=(
+                geometry_prediction.confidence if geometry_prediction else None
+            ),
+            geometry_model_hash=(
+                geometry_prediction.model_manifest_hash if geometry_prediction else None
+            ),
         )
         
         # Generate interpretation

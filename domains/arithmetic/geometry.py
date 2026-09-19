@@ -68,11 +68,13 @@ class GeometryPriorPolicy:
             (item for item in sorted(self.buckets, key=lambda item: item.max_bits) if bits <= item.max_bits),
             self.buckets[-1],
         )
-        label = max(bucket.probabilities, key=bucket.probabilities.get)
+        best = max(bucket.probabilities, key=bucket.probabilities.get)
+        ordered = sorted(bucket.probabilities.values(), reverse=True)
+        label = "indeterminate" if ordered[0] - ordered[1] < 0.10 else best
         return FactorGeometryPrediction(
             probabilities=dict(bucket.probabilities),
             label=label,
-            confidence=bucket.probabilities[label],
+            confidence=ordered[0],
             model_manifest_hash=self.train_manifest_hash,
         )
 

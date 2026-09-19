@@ -371,7 +371,7 @@ class GameLearningApp(tk.Tk):
             "Steps taken:",
             "Entropy:",
             "Confidence:",
-            "Near-square score:",
+            "Factor geometry:",
             "Size window (smaller factor):",
             "Residue preferences (mod 30):",
             "Interpretation:"
@@ -1170,7 +1170,17 @@ class GameLearningApp(tk.Tk):
         self.summary_vars["Steps taken:"].set(str(summary.steps_taken))
         self.summary_vars["Entropy:"].set(summary.format_entropy_change())
         self.summary_vars["Confidence:"].set(f"{summary.confidence:.3f}" if summary.confidence is not None else "n/a")
-        self.summary_vars["Near-square score:"].set(f"{summary.near_square_score:.3f} ({summary.get_near_square_label()})")
+        if summary.geometry_probabilities:
+            probs = summary.geometry_probabilities
+            geometry_text = (
+                f"B {probs.get('balanced', 0):.0%} / "
+                f"I {probs.get('intermediate', 0):.0%} / "
+                f"S {probs.get('skewed', 0):.0%} "
+                f"({summary.geometry_label})"
+            )
+        else:
+            geometry_text = "unavailable"
+        self.summary_vars["Factor geometry:"].set(geometry_text)
         self.summary_vars["Size window (smaller factor):"].set(summary.format_size_window(summary.target_n))
         self.summary_vars["Residue preferences (mod 30):"].set(summary.format_residues())
         

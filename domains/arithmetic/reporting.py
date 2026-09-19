@@ -45,6 +45,10 @@ class InferenceSummary:
     max_steps: Optional[int] = None
     min_steps: Optional[int] = None
     early_stop_enabled: Optional[bool] = None
+    geometry_probabilities: Optional[Dict[str, float]] = None
+    geometry_label: Optional[str] = None
+    geometry_confidence: Optional[float] = None
+    geometry_model_hash: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary."""
@@ -174,41 +178,26 @@ def generate_interpretation(summary: InferenceSummary) -> List[str]:
     Returns:
         List of 1-3 interpretation lines (cautious language).
     """
-    SMALL_N_THRESHOLD = 8  # bit_length threshold for small-N behavior
-    CONFIDENCE_THRESHOLD = 0.05  # Minimum confidence for making claims
     lines = []
-    
-    # Entropy interpretation (check for None to avoid comparison errors)
-    if summary.entropy_pct_reduction is not None:
-        if summary.entropy_pct_reduction > 50:
-            lines.append("Inference significantly narrowed the search space (>50% entropy reduction).")
-        elif summary.entropy_pct_reduction > 20:
-            lines.append("Inference moderately narrowed the search space (20-50% entropy reduction).")
-        else:
-            lines.append("Inference made minimal progress (< 20% entropy reduction).")
+
+    if summary.geometry_probabilities:
+        probs = summary.geometry_probabilities
+        lines.append(
+            "Calibrated factor geometry: "
+            f"balanced {probs.get('balanced', 0):.0%}, "
+            f"intermediate {probs.get('intermediate', 0):.0%}, "
+            f"skewed {probs.get('skewed', 0):.0%}."
+        )
+        if summary.geometry_label == "indeterminate":
+            lines.append(
+                "Available factor-blind evidence does not distinguish the geometry regimes."
+            )
     else:
-        lines.append("Entropy reduction data not available.")
-    
-    # Small-N hygiene: explain expected behavior for very small N
-    if summary.bit_length is not None and summary.bit_length <= SMALL_N_THRESHOLD:
-        if summary.entropy_pct_reduction is not None and summary.entropy_pct_reduction < 5:
-            lines.append("N is very small; limited structural inference is expected at this scale.")
-    
-    # Near-square / skew interpretation (only if confidence sufficient)
-    if summary.near_square_score is not None and (summary.confidence is None or summary.confidence >= CONFIDENCE_THRESHOLD):
-        ns_label = summary.get_near_square_label()
-        if ns_label == "HIGH":
-            lines.append("Under current constraints, target may have factors close in magnitude (near-square).")
-        elif ns_label == "LOW":
-            lines.append("Under current constraints, target may be skewed (factors differ significantly in size).")
-    
-    # Confidence interpretation (if available)
-    if summary.confidence is not None:
-        if summary.confidence > 0.8:
-            lines.append(f"System expressed high confidence ({summary.confidence:.2f}) in belief state.")
-        elif summary.confidence < 0.3:
-            lines.append(f"System expressed low confidence ({summary.confidence:.2f}).")
-    
+        lines.append("Calibrated factor-geometry data is unavailable.")
+
+    lines.append(
+        "Transform entropy is an internal scheduling diagnostic, not calibrated factor confidence."
+    )
     return lines
 
 
@@ -324,7 +313,16 @@ def build_inference_summary_text(summary: InferenceSummary,
     lines.append("BELIEF STATE")
     lines.append("-" * 70)
     lines.append(f"Confidence: {summary.confidence if summary.confidence is not None else 'n/a'}")
-    lines.append(f"Near-square score: {summary.near_square_score:.3f} ({summary.get_near_square_label()})")
+    if summary.geometry_probabilities:
+        probs = summary.geometry_probabilities
+        lines.append(
+            "Factor geometry posterior: "
+            f"balanced={probs.get('balanced', 0):.3f}, "
+            f"intermediate={probs.get('intermediate', 0):.3f}, "
+            f"skewed={probs.get('skewed', 0):.3f} "
+            f"({summary.geometry_label})"
+        )
+    lines.append(f"Legacy square-gap diagnostic: {summary.near_square_score:.3f}")
     lines.append(f"Estimated smaller factor magnitude:")
     lines.append(f"  {summary.format_size_window(summary.target_n)}")
     lines.append(f"Top residues (mod 30): {summary.format_residues()}")
@@ -426,7 +424,15 @@ def build_inference_run_card_text(summary: InferenceSummary,
     lines.append(f"Steps taken: {summary.steps_taken}")
     lines.append(f"Entropy: {summary.format_entropy_change()}")
     lines.append(f"Confidence: {summary.confidence:.3f}" if summary.confidence is not None else "Confidence: n/a")
-    lines.append(f"Near-square score: {summary.near_square_score:.3f} ({summary.get_near_square_label()})")
+    if summary.geometry_probabilities:
+        probs = summary.geometry_probabilities
+        lines.append(
+            "Geometry: "
+            f"B={probs.get('balanced', 0):.2f}, "
+            f"I={probs.get('intermediate', 0):.2f}, "
+            f"S={probs.get('skewed', 0):.2f} "
+            f"({summary.geometry_label})"
+        )
     lines.append(f"Estimated smaller factor magnitude:")
     lines.append(f"  {summary.format_size_window(summary.target_n)}")
     lines.append(f"Top residues (mod 30): {summary.format_residues()}")
