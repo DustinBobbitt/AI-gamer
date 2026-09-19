@@ -304,7 +304,7 @@ def build_inference_summary_text(summary: InferenceSummary,
     lines.append("")
     
     # Entropy
-    lines.append("ENTROPY METRICS")
+    lines.append("LEGACY TRANSFORM ENTROPY (SCHEDULING DIAGNOSTIC ONLY)")
     lines.append("-" * 70)
     lines.append(f"Start: {summary.entropy_start:.4f}")
     lines.append(f"End: {summary.entropy_end:.4f}")
@@ -315,7 +315,10 @@ def build_inference_summary_text(summary: InferenceSummary,
     # Belief state
     lines.append("BELIEF STATE")
     lines.append("-" * 70)
-    lines.append(f"Confidence: {summary.confidence if summary.confidence is not None else 'n/a'}")
+    lines.append(
+        "Legacy transform confidence (uncalibrated): "
+        f"{summary.confidence if summary.confidence is not None else 'n/a'}"
+    )
     if summary.geometry_probabilities:
         probs = summary.geometry_probabilities
         lines.append(
@@ -425,8 +428,12 @@ def build_inference_run_card_text(summary: InferenceSummary,
     lines.append("-" * 70)
     lines.append(f"Termination reason: {summary.termination_reason}")
     lines.append(f"Steps taken: {summary.steps_taken}")
-    lines.append(f"Entropy: {summary.format_entropy_change()}")
-    lines.append(f"Confidence: {summary.confidence:.3f}" if summary.confidence is not None else "Confidence: n/a")
+    lines.append(f"Transform entropy (diagnostic): {summary.format_entropy_change()}")
+    lines.append(
+        f"Legacy transform confidence (uncalibrated): {summary.confidence:.3f}"
+        if summary.confidence is not None
+        else "Legacy transform confidence (uncalibrated): n/a"
+    )
     if summary.geometry_probabilities:
         probs = summary.geometry_probabilities
         lines.append(

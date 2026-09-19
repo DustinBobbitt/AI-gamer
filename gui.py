@@ -252,7 +252,13 @@ class GameLearningApp(tk.Tk):
         )
         
         self.allow_update_policy_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(assumptions_frame, text="Allow learning during inference (experimental)", variable=self.allow_update_policy_var).grid(
+        learning_status = ttk.Checkbutton(
+            assumptions_frame,
+            text="Runtime policy is frozen; retrain with the offline trainers",
+            variable=self.allow_update_policy_var,
+            state=tk.DISABLED,
+        )
+        learning_status.grid(
             row=3, column=0, sticky=tk.W, padx=5, pady=2
         )
         
@@ -369,8 +375,8 @@ class GameLearningApp(tk.Tk):
         summary_labels = [
             "Termination reason:",
             "Steps taken:",
-            "Entropy:",
-            "Confidence:",
+            "Transform entropy (diagnostic):",
+            "Legacy transform confidence:",
             "Factor geometry:",
             "Legacy fallback window:",
             "Residue preferences (mod 30):",
@@ -1167,8 +1173,10 @@ class GameLearningApp(tk.Tk):
         """Update the GUI Belief Summary section with InferenceSummary data."""
         self.summary_vars["Termination reason:"].set(summary.termination_reason)
         self.summary_vars["Steps taken:"].set(str(summary.steps_taken))
-        self.summary_vars["Entropy:"].set(summary.format_entropy_change())
-        self.summary_vars["Confidence:"].set(f"{summary.confidence:.3f}" if summary.confidence is not None else "n/a")
+        self.summary_vars["Transform entropy (diagnostic):"].set(summary.format_entropy_change())
+        self.summary_vars["Legacy transform confidence:"].set(
+            f"{summary.confidence:.3f}" if summary.confidence is not None else "n/a"
+        )
         if summary.geometry_probabilities:
             probs = summary.geometry_probabilities
             geometry_text = (
