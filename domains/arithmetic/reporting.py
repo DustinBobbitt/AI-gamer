@@ -326,7 +326,7 @@ def build_inference_summary_text(summary: InferenceSummary,
             f"({summary.geometry_label})"
         )
     lines.append(f"Legacy square-gap diagnostic: {summary.near_square_score:.3f}")
-    lines.append(f"Estimated smaller factor magnitude:")
+    lines.append("Legacy fallback window (not calibrated):")
     lines.append(f"  {summary.format_size_window(summary.target_n)}")
     lines.append(f"Top residues (mod 30): {summary.format_residues()}")
     lines.append("")
@@ -436,7 +436,7 @@ def build_inference_run_card_text(summary: InferenceSummary,
             f"S={probs.get('skewed', 0):.2f} "
             f"({summary.geometry_label})"
         )
-    lines.append(f"Estimated smaller factor magnitude:")
+    lines.append("Legacy fallback window (not calibrated):")
     lines.append(f"  {summary.format_size_window(summary.target_n)}")
     lines.append(f"Top residues (mod 30): {summary.format_residues()}")
     lines.append("")

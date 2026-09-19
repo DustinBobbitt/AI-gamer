@@ -372,7 +372,7 @@ class GameLearningApp(tk.Tk):
             "Entropy:",
             "Confidence:",
             "Factor geometry:",
-            "Size window (smaller factor):",
+            "Legacy fallback window:",
             "Residue preferences (mod 30):",
             "Interpretation:"
         ]
@@ -1008,17 +1008,14 @@ class GameLearningApp(tk.Tk):
             if adaptive_policy is not None:
                 action = adaptive_policy.select_action(env.belief_state, target_n)
                 if action is None:
-                    if disable_early_stop or step < min_steps:
-                        action = step % len(env.get_action_space())
-                    else:
-                        env.finish("policy_complete")
-                        self.after(
-                            0,
-                            lambda: self._append_inference_log(
-                                "Adaptive policy stopped: no transform can improve the belief state."
-                            ),
-                        )
-                        break
+                    env.finish("policy_complete")
+                    self.after(
+                        0,
+                        lambda: self._append_inference_log(
+                            "Adaptive policy stopped: all validated evidence has been collected."
+                        ),
+                    )
+                    break
             else:
                 action = random.randint(0, len(env.get_action_space()) - 1)
             
@@ -1183,7 +1180,7 @@ class GameLearningApp(tk.Tk):
         else:
             geometry_text = "unavailable"
         self.summary_vars["Factor geometry:"].set(geometry_text)
-        self.summary_vars["Size window (smaller factor):"].set(summary.format_size_window(summary.target_n))
+        self.summary_vars["Legacy fallback window:"].set(summary.format_size_window(summary.target_n))
         self.summary_vars["Residue preferences (mod 30):"].set(summary.format_residues())
         
         # Update interpretation text

@@ -28,7 +28,7 @@ def initialized_env(target_n: int, **config) -> SemiprimeInferenceEnv:
 
 
 class AdaptiveInferencePolicyTests(unittest.TestCase):
-    def test_feature_transforms_run_once_then_policy_reaches_fixed_point(self) -> None:
+    def test_only_validated_evidence_runs_before_policy_completes(self) -> None:
         env = initialized_env(77, disable_early_stop=True)
         policy = AdaptiveInferencePolicy(min_progress=1e-6)
         actions = []
@@ -41,12 +41,9 @@ class AdaptiveInferencePolicyTests(unittest.TestCase):
             actions.append(action)
             env.step(action)
 
-        self.assertEqual(actions[:3], [0, 1, 2])
-        self.assertLess(len(actions), 20)
+        self.assertEqual(actions, [1])
         self.assertEqual(env.termination_reason, "policy_complete")
-        self.assertEqual(actions.count(0), 1)
         self.assertEqual(actions.count(1), 1)
-        self.assertEqual(actions.count(2), 1)
 
     def test_configured_convergence_threshold_is_used(self) -> None:
         env = initialized_env(77, convergence_threshold=0.25)
