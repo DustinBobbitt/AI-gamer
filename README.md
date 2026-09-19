@@ -96,6 +96,26 @@ loop = MetaLearningLoop(config)
 summary = loop.run(total_phases=10)
 ```
 
+### Empirical policy training
+
+The post-inference verifier uses a frozen, schema-versioned budget policy trained
+on deterministic balanced and skewed semiprime corpora. Factor labels are used
+only by the offline trainer and evaluator; the runtime policy selects a bounded
+verification budget from the target bit length.
+
+```bash
+# Reproduce the policy checkpoint and its validation metrics
+python3 train_verifier_policy.py
+
+# Compare learned, fixed-budget, window-only, and inference-policy baselines
+python3 benchmark_arithmetic.py --count-per-group 50
+```
+
+The checkpoint records training and validation manifest hashes, seeds, and
+per-bit success/check metrics in `domains/arithmetic/verifier_policy.json`.
+Inference transforms and verification remain separate, and benchmark results
+must not attribute verifier gains to transform entropy.
+
 ## Key Features
 
 ### Transferable Learning
