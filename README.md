@@ -107,6 +107,9 @@ verification budget from the target bit length.
 # Reproduce the policy checkpoint and its validation metrics
 python3 train_verifier_policy.py
 
+# Reproduce calibrated balanced/intermediate/skewed geometry beliefs
+python3 train_geometry_policy.py
+
 # Compare learned, fixed-budget, window-only, and inference-policy baselines
 python3 benchmark_arithmetic.py --count-per-group 50
 ```
@@ -115,6 +118,12 @@ The checkpoint records training and validation manifest hashes, seeds, and
 per-bit success/check metrics in `domains/arithmetic/verifier_policy.json`.
 Inference transforms and verification remain separate, and benchmark results
 must not attribute verifier gains to transform entropy.
+
+The geometry checkpoint currently reports an indeterminate posterior because
+the permitted factor-blind features did not predict factor balance above
+chance. This is intentional: its held-out calibration is substantially better
+than the retired square-gap confidence, and the GUI does not manufacture
+certainty where the experiment found no discriminating evidence.
 
 ## Key Features
 
