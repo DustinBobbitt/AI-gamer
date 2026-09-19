@@ -9,7 +9,7 @@ from domains.arithmetic.policy import AdaptiveInferencePolicy
 from domains.arithmetic.scenarios import ScenarioGenerator
 from domains.arithmetic.state import BeliefState
 from domains.arithmetic.transforms import NearSquareUpdate
-from domains.arithmetic.verifier import verify_factors_adaptively, verify_factors_from_belief
+from domains.arithmetic.verifier import verify_factors_adaptively
 from domains.arithmetic.verifier_policy import (
     VerifierBudgetPolicy,
     train_verifier_budget_policy,
@@ -49,13 +49,13 @@ class AdaptiveInferencePolicyTests(unittest.TestCase):
         env = initialized_env(77, convergence_threshold=0.25)
         self.assertEqual(env.convergence_threshold, 0.25)
 
-    def test_verifier_searches_the_reported_adaptive_window(self) -> None:
+    def test_adaptive_verifier_does_not_depend_on_legacy_window(self) -> None:
         env = initialized_env(77, disable_early_stop=True)
         policy = AdaptiveInferencePolicy(min_progress=1e-4)
         while (action := policy.select_action(env.belief_state, env.current_N)) is not None:
             env.step(action)
 
-        result = verify_factors_from_belief(77, env.belief_state)
+        result = verify_factors_adaptively(77, env.belief_state, fermat_budget=4)
 
         self.assertTrue(result.factors_found)
         self.assertEqual((result.p, result.q), (7, 11))
