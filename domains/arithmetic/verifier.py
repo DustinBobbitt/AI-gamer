@@ -16,7 +16,7 @@ import time
 import math
 from typing import Optional, Tuple
 from domains.arithmetic.state import BeliefState
-from domains.arithmetic.reporting import VerificationResult
+from domains.arithmetic.reporting import VerificationResult, compute_adaptive_window
 
 
 def verify_factors_from_belief(
@@ -48,24 +48,13 @@ def verify_factors_from_belief(
             skip_reason="Invalid size ratio estimate from belief state"
         )
     
-    # Compute search window based on belief
-    sqrt_n = math.sqrt(N)
-    
-    if belief.near_square_score > 0.7:  # High near-square score
-        # Search around sqrt(N)
-        window_low = int(sqrt_n * 0.95)
-        window_high = int(sqrt_n * 1.05)
-    else:  # Skewed factors
-        # Use size ratio to estimate smaller factor range
-        estimated_small = sqrt_n * belief.size_ratio_estimate
-        window_low = int(estimated_small * 0.8)
-        window_high = int(estimated_small * 1.2)
-    
-    # Ensure odd candidates only
-    if window_low % 2 == 0:
-        window_low += 1
-    if window_high % 2 == 0:
-        window_high -= 1
+    # Use the same window shown in summaries and run cards. Keeping one source
+    # of truth prevents the verifier from searching a narrower, hidden range.
+    window_low, window_high = compute_adaptive_window(
+        N,
+        belief.near_square_score,
+        assume_odd=True,
+    )
     
     window_width = (window_high - window_low) // 2 + 1
     
@@ -163,6 +152,127 @@ def verify_factors_from_belief(
         checks_attempted=checks_attempted,
         time_ms=elapsed_ms,
         failure_reason=failure_reason
+    )
+
+
+def verify_factors_adaptively(
+    N: int,
+    belief: BeliefState,
+    max_checks: int = 100000,
+    fermat_budget: int = 128,
+) -> VerificationResult:
+    """Verify with a cost-aware portfolio of complementary strategies.
+
+    The portfolio is deliberately outside the inference environment. It first
+    tries bounded Fermat checks for balanced factors, then a bounded low-factor
+    search for skewed factors, and finally the inferred belief window. The
+    trace makes every search decision and its cost visible.
+    """
+    start_time = time.perf_counter()
+    checks = 0
+    trace = []
+
+    if N <= 1 or N % 2 == 0:
+        return VerificationResult(
+            factors_found=False,
+            verifier_skipped=True,
+            skip_reason="Adaptive verifier currently requires odd N > 1",
+            strategy_used="adaptive_portfolio",
+            strategy_trace=trace,
+        )
+
+    def success(candidate: int, strategy: str) -> Optional[VerificationResult]:
+        from utils.primes import is_prime
+
+        other = N // candidate
+        if candidate < 2 or other < 2 or not is_prime(candidate) or not is_prime(other):
+            return None
+        return VerificationResult(
+            factors_found=True,
+            p=min(candidate, other),
+            q=max(candidate, other),
+            checks_attempted=checks,
+            time_ms=(time.perf_counter() - start_time) * 1000,
+            strategy_used=strategy,
+            strategy_trace=trace.copy(),
+        )
+
+    # Balanced-factor hypothesis: bounded Fermat probes are cheap when p ≈ q.
+    trace.append(f"fermat_probe[budget={fermat_budget}]")
+    a = math.isqrt(N)
+    if a * a < N:
+        a += 1
+    for _ in range(min(fermat_budget, max_checks - checks)):
+        checks += 1
+        b_squared = a * a - N
+        b = math.isqrt(b_squared)
+        if b * b == b_squared:
+            result = success(a - b, "fermat_probe")
+            if result:
+                return result
+        a += 1
+
+    # Skewed-factor hypothesis: search only the generator-independent low
+    # quarter-bit band, rather than pretending the near-square score identifies
+    # factor balance.
+    trace.append("low_factor_band")
+    sqrt_n = math.isqrt(N)
+    low_factor_high = min(sqrt_n, 1 << min(16, max(3, N.bit_length() // 4 + 1)))
+    for candidate in range(3, low_factor_high + 1, 2):
+        if checks >= max_checks:
+            break
+        checks += 1
+        if N % candidate == 0:
+            result = success(candidate, "low_factor_band")
+            if result:
+                return result
+
+    # General semiprime hypothesis: bounded deterministic Pollard-Rho fills the
+    # gap between near-square and explicitly low-factor structures.
+    trace.append("pollard_rho")
+    for constant in (1, 3, 5, 7, 11):
+        if checks >= max_checks:
+            break
+        x = 2
+        y = 2
+        while checks < max_checks:
+            x = (x * x + constant) % N
+            y = (y * y + constant) % N
+            y = (y * y + constant) % N
+            checks += 1
+            divisor = math.gcd(abs(x - y), N)
+            if divisor == 1:
+                continue
+            if divisor == N:
+                break
+            result = success(divisor, "pollard_rho")
+            if result:
+                return result
+            break
+
+    # Preserve the belief-guided path for medium cases not covered above.
+    trace.append("belief_window")
+    if checks < max_checks:
+        window_result = verify_factors_from_belief(
+            N,
+            belief,
+            max_checks=max_checks - checks,
+        )
+        checks += window_result.checks_attempted
+        if window_result.factors_found:
+            window_result.checks_attempted = checks
+            window_result.time_ms = (time.perf_counter() - start_time) * 1000
+            window_result.strategy_used = "belief_window"
+            window_result.strategy_trace = trace.copy()
+            return window_result
+
+    return VerificationResult(
+        factors_found=False,
+        checks_attempted=checks,
+        time_ms=(time.perf_counter() - start_time) * 1000,
+        failure_reason="adaptive verifier exhausted its bounded strategy portfolio",
+        strategy_used="adaptive_portfolio",
+        strategy_trace=trace,
     )
 
 

@@ -35,6 +35,9 @@ class SemiprimeInferenceEnv(DomainTask):
         self.distribution_type = config.get('distribution_type', 'mixed') if config else 'mixed'
         self.min_steps = config.get('min_steps', 0) if config else 0
         self.disable_early_stop = config.get('disable_early_stop', False) if config else False
+        self.convergence_threshold = config.get('convergence_threshold', 0.001) if config else 0.001
+        self.assume_semiprime = config.get('assume_semiprime', True) if config else True
+        self.allow_square = config.get('allow_square', False) if config else False
         
         # Current episode state
         self.current_N: Optional[int] = None
@@ -56,7 +59,6 @@ class SemiprimeInferenceEnv(DomainTask):
         
         # Termination tracking
         self.termination_reason: str = ""
-        self.convergence_threshold: float = 0.001  # Entropy change threshold
         self.convergence_window: int = 5  # Steps to check for convergence
         self.entropy_start: float = 0.0
     
@@ -214,6 +216,10 @@ class SemiprimeInferenceEnv(DomainTask):
                     return True, "policy_stalled"
         
         return False, ""
+
+    def finish(self, reason: str = "policy_complete") -> None:
+        """Finish an episode when the policy has no useful transforms left."""
+        self.termination_reason = reason
     
     def _compute_info(self) -> Dict[str, Any]:
         """Compute evaluation metrics using ground truth (for reporting only)."""
@@ -357,6 +363,17 @@ Near Square: {self.belief_state.near_square_score:.3f}
             self.belief_state.near_square_score,
             assume_odd=True  # Default assumption
         )
+
+        geometry_prediction = None
+        try:
+            from domains.arithmetic.geometry import GeometryPriorPolicy
+            geometry_prediction = GeometryPriorPolicy.load().predict(
+                self.current_N,
+                assume_semiprime=self.assume_semiprime,
+                allow_square=self.allow_square,
+            )
+        except (OSError, ValueError, KeyError):
+            pass
         
         # Create summary
         summary = InferenceSummary(
@@ -376,7 +393,20 @@ Near Square: {self.belief_state.near_square_score:.3f}
             bit_length=self.current_N.bit_length() if self.current_N else 0,
             max_steps=self.max_steps,
             min_steps=self.min_steps,
-            early_stop_enabled=not self.disable_early_stop
+            early_stop_enabled=not self.disable_early_stop,
+            geometry_probabilities=(
+                geometry_prediction.probabilities if geometry_prediction else None
+            ),
+            geometry_label=geometry_prediction.label if geometry_prediction else None,
+            geometry_confidence=(
+                geometry_prediction.confidence if geometry_prediction else None
+            ),
+            geometry_model_hash=(
+                geometry_prediction.model_manifest_hash if geometry_prediction else None
+            ),
+            geometry_evidence=(
+                list(geometry_prediction.evidence) if geometry_prediction else None
+            ),
         )
         
         # Generate interpretation

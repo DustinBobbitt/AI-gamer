@@ -9,7 +9,7 @@ from typing import List
 
 
 def is_prime(n: int) -> bool:
-    """Deterministic primality check for 32-bit integers."""
+    """Deterministic Miller-Rabin primality check for unsigned 64-bit integers."""
     if n < 2:
         return False
     small_primes = (2, 3, 5, 7, 11, 13, 17, 19, 23, 29)
@@ -35,7 +35,8 @@ def is_prime(n: int) -> bool:
                 return True
         return False
 
-    for a in (2, 7, 61):
+    # This witness set is deterministic for every n < 2**64.
+    for a in (2, 325, 9375, 28178, 450775, 9780504, 1795265022):
         if a % n == 0:
             continue
         if not check(a):

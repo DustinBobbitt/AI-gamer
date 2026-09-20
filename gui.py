@@ -235,7 +235,7 @@ class GameLearningApp(tk.Tk):
         )
         
         self.use_learned_policy_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(assumptions_frame, text="Use learned policy", variable=self.use_learned_policy_var,
+        ttk.Checkbutton(assumptions_frame, text="Use adaptive policy", variable=self.use_learned_policy_var,
                        command=self._on_policy_toggle).grid(
             row=0, column=1, sticky=tk.W, padx=5, pady=2
         )
@@ -252,7 +252,13 @@ class GameLearningApp(tk.Tk):
         )
         
         self.allow_update_policy_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(assumptions_frame, text="Allow learning during inference (experimental)", variable=self.allow_update_policy_var).grid(
+        learning_status = ttk.Checkbutton(
+            assumptions_frame,
+            text="Runtime policy is frozen; retrain with the offline trainers",
+            variable=self.allow_update_policy_var,
+            state=tk.DISABLED,
+        )
+        learning_status.grid(
             row=3, column=0, sticky=tk.W, padx=5, pady=2
         )
         
@@ -369,10 +375,10 @@ class GameLearningApp(tk.Tk):
         summary_labels = [
             "Termination reason:",
             "Steps taken:",
-            "Entropy:",
-            "Confidence:",
-            "Near-square score:",
-            "Size window (smaller factor):",
+            "Transform entropy (diagnostic):",
+            "Legacy transform confidence:",
+            "Factor geometry:",
+            "Legacy fallback window:",
             "Residue preferences (mod 30):",
             "Interpretation:"
         ]
@@ -676,7 +682,7 @@ class GameLearningApp(tk.Tk):
                 "is_semiprime": self.assume_semiprime_var.get(),
                 "allow_square": self.allow_square_var.get()
             },
-            "policy": "learned" if self.use_learned_policy_var.get() else "baseline",
+            "policy": "adaptive" if self.use_learned_policy_var.get() else "baseline",
             "limits": {
                 "max_steps": int(self.max_steps_var.get() or "200"),
                 "min_steps": int(self.min_steps_var.get() or "0"),
@@ -940,7 +946,8 @@ class GameLearningApp(tk.Tk):
             return
         
         from domains.arithmetic.env import SemiprimeInferenceEnv
-        from domains.arithmetic.verifier import verify_factors_from_belief, run_baseline_fermat, run_baseline_trial_division
+        from domains.arithmetic.verifier import verify_factors_adaptively, run_baseline_fermat, run_baseline_trial_division
+        from domains.arithmetic.verifier_policy import VerifierBudgetPolicy
         from domains.arithmetic.reporting import write_summary_txt, write_run_card_txt, VerificationResult, BaselineComparison
         
         # Create output directory
@@ -966,8 +973,11 @@ class GameLearningApp(tk.Tk):
             'max_steps': max_steps,
             'min_steps': min_steps,
             'disable_early_stop': disable_early_stop,
+            'convergence_threshold': config["limits"]["epsilon"],
             'bit_length': target_n.bit_length(),
-            'distribution_type': 'unknown'  # User-provided N
+            'distribution_type': 'unknown',  # User-provided N
+            'assume_semiprime': config["assumptions"]["is_semiprime"],
+            'allow_square': config["assumptions"]["allow_square"],
         })
         
         self._append_inference_log(f"Running inference on N = {target_n}")
@@ -993,10 +1003,27 @@ class GameLearningApp(tk.Tk):
         # Run inference loop
         done = False
         step = 0
+        adaptive_policy = None
+        if config["policy"] == "adaptive":
+            from domains.arithmetic.policy import AdaptiveInferencePolicy
+            adaptive_policy = AdaptiveInferencePolicy(
+                min_progress=config["limits"]["epsilon"]
+            )
         
         while not done and step < max_steps:
-            # Simple random policy (TODO: integrate with Brain)
-            action = random.randint(0, len(env.get_action_space()) - 1)
+            if adaptive_policy is not None:
+                action = adaptive_policy.select_action(env.belief_state, target_n)
+                if action is None:
+                    env.finish("policy_complete")
+                    self.after(
+                        0,
+                        lambda: self._append_inference_log(
+                            "Adaptive policy stopped: all validated evidence has been collected."
+                        ),
+                    )
+                    break
+            else:
+                action = random.randint(0, len(env.get_action_space()) - 1)
             
             obs, reward, done, info = env.step(action)
             step += 1
@@ -1051,8 +1078,31 @@ class GameLearningApp(tk.Tk):
         # Optional verification
         verification = None
         if config['options'].get('verify_factors', True):
-            self._append_inference_log("Running post-inference verification...")
-            verification = verify_factors_from_belief(target_n, env.belief_state, max_checks=100000)
+            try:
+                verifier_policy = VerifierBudgetPolicy.load()
+                fermat_budget = verifier_policy.budget_for(target_n)
+                config["verification_policy"] = {
+                    "schema_version": verifier_policy.schema_version,
+                    "fermat_budget": fermat_budget,
+                    "train_manifest_hash": verifier_policy.train_manifest_hash,
+                    "validation_manifest_hash": verifier_policy.validation_manifest_hash,
+                }
+                with open(config_file, "w", encoding="utf-8") as f:
+                    json.dump(config, f, indent=2)
+                self._append_inference_log(
+                    f"Running learned verifier policy (Fermat budget: {fermat_budget})..."
+                )
+            except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
+                fermat_budget = 128
+                self._append_inference_log(
+                    f"Verifier policy unavailable; using validated fallback budget 128 ({exc})"
+                )
+            verification = verify_factors_adaptively(
+                target_n,
+                env.belief_state,
+                max_checks=100000,
+                fermat_budget=fermat_budget,
+            )
             
             if verification.verifier_skipped:
                 self._append_inference_log(f"  Verifier skipped: {verification.skip_reason}")
@@ -1060,6 +1110,7 @@ class GameLearningApp(tk.Tk):
                 self._append_inference_log(f"  ✓ Factors found: {verification.p} × {verification.q}")
                 self._append_inference_log(f"  Checks attempted: {verification.checks_attempted}")
                 self._append_inference_log(f"  Time: {verification.time_ms:.2f} ms")
+                self._append_inference_log(f"  Strategy: {verification.strategy_used}")
             else:
                 self._append_inference_log(f"  No factors found in window (width: {verification.window_width})")
                 self._append_inference_log(f"  Checks attempted: {verification.checks_attempted}")
@@ -1122,10 +1173,22 @@ class GameLearningApp(tk.Tk):
         """Update the GUI Belief Summary section with InferenceSummary data."""
         self.summary_vars["Termination reason:"].set(summary.termination_reason)
         self.summary_vars["Steps taken:"].set(str(summary.steps_taken))
-        self.summary_vars["Entropy:"].set(summary.format_entropy_change())
-        self.summary_vars["Confidence:"].set(f"{summary.confidence:.3f}" if summary.confidence is not None else "n/a")
-        self.summary_vars["Near-square score:"].set(f"{summary.near_square_score:.3f} ({summary.get_near_square_label()})")
-        self.summary_vars["Size window (smaller factor):"].set(summary.format_size_window(summary.target_n))
+        self.summary_vars["Transform entropy (diagnostic):"].set(summary.format_entropy_change())
+        self.summary_vars["Legacy transform confidence:"].set(
+            f"{summary.confidence:.3f}" if summary.confidence is not None else "n/a"
+        )
+        if summary.geometry_probabilities:
+            probs = summary.geometry_probabilities
+            geometry_text = (
+                f"B {probs.get('balanced', 0):.0%} / "
+                f"I {probs.get('intermediate', 0):.0%} / "
+                f"S {probs.get('skewed', 0):.0%} "
+                f"({summary.geometry_label})"
+            )
+        else:
+            geometry_text = "unavailable"
+        self.summary_vars["Factor geometry:"].set(geometry_text)
+        self.summary_vars["Legacy fallback window:"].set(summary.format_size_window(summary.target_n))
         self.summary_vars["Residue preferences (mod 30):"].set(summary.format_residues())
         
         # Update interpretation text

@@ -1,51 +1,49 @@
-# AI Gamer - Multi-Domain Meta-Learning System
+# Semiprime Conjecture Engine
 
-A meta-learning platform that learns transferable reasoning skills across multiple problem domains, with a focus on arithmetic factor inference for semiprimes and optional toy game domains for validation.
+An empirically evaluated arithmetic reasoning workbench with calibrated
+factor-geometry beliefs, bounded verification strategies, and retained legacy
+toy-game experiments.
 
 ## Overview
 
-This system learns constraint-based inference patterns and discovers which internal structures transfer across domains. It implements a self-improving loop that:
+The primary arithmetic path separates two responsibilities:
 
-1. **Learns how to infer constraints**, not just enumerate solutions
-2. **Transfers knowledge** across problem domains while compressing redundant patterns
-3. **Measures learning progress** using importance-weighted metrics
-4. **Focuses on semiprime factorization** using belief state inference (no trial division)
+1. **Inference** collects only validated factor-blind evidence and reports a
+   calibrated balanced/intermediate/skewed posterior.
+2. **Verification** uses a transparent, bounded strategy portfolio to attempt
+   factor extraction after inference.
+3. **Offline training** selects verifier budgets from deterministic training
+   corpora and records validation metrics and manifest hashes.
+4. **Benchmarks** compare every accepted change with fixed, random, held-out,
+   and out-of-distribution baselines.
 
 ## Primary Domain: Arithmetic Factor Inference
 
-The system learns to infer factors of semiprimes (N = p×q) through **constraint discovery** rather than exhaustive search:
+The current accepted inference evidence is deliberately narrow:
 
-- **No trial division loops** - learns patterns instead
-- **BeliefState representation** - fixed-size token vector (entropy, residue weights, confidence)
-- **Transform-based inference** - applies deterministic constraint updates
-- **Reward: Information gain** - entropy reduction drives learning
-- **Optional verification** - narrow down factor window for final extraction
+- Exact-perfect-square evidence is used only when the user assumes a semiprime
+  and explicitly allows `p=q`.
+- Ordinary targets retain an honest calibrated prior when available
+  factor-blind evidence cannot identify factor geometry.
+- Residue sharpening, smoothness scores, and proximity to an unrelated integer
+  square are not treated as calibrated factor evidence.
+- Transform entropy is retained only as a legacy scheduling diagnostic.
+- Optional verification is separate and reports its strategy trace and work.
 
 ## Core Architecture
 
-- **Brain** (`brain.py`) - Shared neural policy (θ) trained across domains
+- **Geometry policy** (`domains/arithmetic/geometry.py`) - Calibrated factor
+  geometry posterior and exact-square evidence
+- **Verifier policy** (`domains/arithmetic/verifier_policy.py`) - Offline-trained
+  per-bit strategy budgets
+- **Verifier** (`domains/arithmetic/verifier.py`) - Bounded Fermat, low-factor,
+  Pollard-Rho, and legacy fallback strategies
 - **Domain System** (`domains/`) - Pluggable problem domains:
   - **Arithmetic** (`domains/arithmetic/`) - Semiprime factor inference (primary)
   - **Toy Games** (`domains/toy_games/`) - TicTacToe, NumberGuessing (validation)
-- **Skill Memory** (`skill_memory.py`) - Explicit storage of transferable transform sequences
-- **Consolidator** (`consolidator.py`) - Meta-system that learns safe knowledge compression
-- **Meta-Learning Loop** (`meta_learning_loop.py`) - Main orchestrator across domains
-
-## Learning Loop
-
-1. **Acquisition Phase** - Train on scenarios without pruning (arithmetic or toy domains)
-2. **Importance Estimation** - Compute importance metrics (gradient-based, not Hessian Fisher)
-3. **Consolidation Phase** - Propose compression via pruning, merging, or quantization
-4. **Regression Testing** - Verify performance on held-out scenarios
-5. **Correction & Learning** - Restore if needed, learn which consolidation strategies work
-
-## Mathematical Principles
-
-- Brain is a parameter vector **θ**
-- Importance represented by diagonal metric **G** (gradient-based, Fisher-inspired)
-- Importance-weighted drift measured by **Δθᵀ G Δθ**
-- Consolidation is constrained optimization: reduce complexity while bounded drift
-- **Arithmetic Domain**: Reward = entropy reduction (Shannon entropy of belief state)
+- **Legacy experimental stack** (`brain.py`, `meta_learning_loop.py`,
+  `skill_memory.py`, `consolidator.py`) - Preserved toy-game prototypes; these
+  placeholder components are not used as evidence of arithmetic learning.
 
 ## Installation
 
@@ -95,6 +93,35 @@ config = TrainingConfig(
 loop = MetaLearningLoop(config)
 summary = loop.run(total_phases=10)
 ```
+
+### Empirical policy training
+
+The post-inference verifier uses a frozen, schema-versioned budget policy trained
+on deterministic balanced and skewed semiprime corpora. Factor labels are used
+only by the offline trainer and evaluator; the runtime policy selects a bounded
+verification budget from the target bit length.
+
+```bash
+# Reproduce the policy checkpoint and its validation metrics
+python3 train_verifier_policy.py
+
+# Reproduce calibrated balanced/intermediate/skewed geometry beliefs
+python3 train_geometry_policy.py
+
+# Compare learned, fixed-budget, window-only, and inference-policy baselines
+python3 benchmark_arithmetic.py --count-per-group 50
+```
+
+The checkpoint records training and validation manifest hashes, seeds, and
+per-bit success/check metrics in `domains/arithmetic/verifier_policy.json`.
+Inference transforms and verification remain separate, and benchmark results
+must not attribute verifier gains to transform entropy.
+
+The geometry checkpoint currently reports an indeterminate posterior because
+the permitted factor-blind features did not predict factor balance above
+chance. This is intentional: its held-out calibration is substantially better
+than the retired square-gap confidence, and the GUI does not manufacture
+certainty where the experiment found no discriminating evidence.
 
 ## Key Features
 

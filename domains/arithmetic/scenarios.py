@@ -15,7 +15,9 @@ from utils.primes import is_prime, generate_prime
 class DistributionType(Enum):
     """Type of semiprime distribution."""
     BALANCED = "balanced"  # p ≈ q (near-square)
+    INTERMEDIATE = "intermediate"  # moderate factor ratio
     SKEWED = "skewed"  # p << q
+    SQUARE = "square"  # p == q
     MIXED = "mixed"  # random mix
 
 
@@ -112,6 +114,53 @@ class ScenarioGenerator:
             distribution_type=DistributionType.SKEWED,
             difficulty=difficulty
         )
+
+    def generate_intermediate(self, bit_length: int) -> SemiprimeScenario:
+        """Generate a semiprime with a moderate factor ratio (2 <= q/p <= 8)."""
+        half_bits = bit_length // 2
+        p_low = 2 ** max(1, half_bits - 1)
+        p_high = 2 ** half_bits
+        q_low = 2 ** half_bits
+        q_high = 2 ** (half_bits + 1)
+
+        while True:
+            p = self.rng.randint(p_low, p_high)
+            while not is_prime(p):
+                p = self.rng.randint(p_low, p_high)
+            q = self.rng.randint(q_low, q_high)
+            while not is_prime(q) or q == p:
+                q = self.rng.randint(q_low, q_high)
+            ratio = max(p, q) / min(p, q)
+            if 2.0 <= ratio <= 8.0:
+                break
+
+        N = p * q
+        return SemiprimeScenario(
+            N=N,
+            p=min(p, q),
+            q=max(p, q),
+            bit_length=N.bit_length(),
+            distribution_type=DistributionType.INTERMEDIATE,
+            difficulty=self._classify_difficulty(bit_length),
+        )
+
+    def generate_square(self, bit_length: int) -> SemiprimeScenario:
+        """Generate a semiprime square N = p² for assumption-gated OOD tests."""
+        factor_bits = max(2, bit_length // 2)
+        low = 2 ** (factor_bits - 1)
+        high = 2 ** factor_bits
+        p = self.rng.randint(low, high)
+        while not is_prime(p):
+            p = self.rng.randint(low, high)
+        N = p * p
+        return SemiprimeScenario(
+            N=N,
+            p=p,
+            q=p,
+            bit_length=N.bit_length(),
+            distribution_type=DistributionType.SQUARE,
+            difficulty=self._classify_difficulty(bit_length),
+        )
     
     def generate_mixed(self, bit_length: int) -> SemiprimeScenario:
         """Generate random mix of balanced and skewed."""
@@ -128,8 +177,12 @@ class ScenarioGenerator:
         
         if dist_type == 'balanced':
             return self.generate_balanced(bit_length)
+        elif dist_type == 'intermediate':
+            return self.generate_intermediate(bit_length)
         elif dist_type == 'skewed':
             return self.generate_skewed(bit_length)
+        elif dist_type == 'square':
+            return self.generate_square(bit_length)
         else:
             return self.generate_mixed(bit_length)
     
@@ -150,8 +203,12 @@ class ScenarioGenerator:
         for _ in range(count):
             if distribution == 'balanced':
                 scenario = self.generate_balanced(bit_length)
+            elif distribution == 'intermediate':
+                scenario = self.generate_intermediate(bit_length)
             elif distribution == 'skewed':
                 scenario = self.generate_skewed(bit_length)
+            elif distribution == 'square':
+                scenario = self.generate_square(bit_length)
             else:
                 scenario = self.generate_mixed(bit_length)
             scenarios.append(scenario)

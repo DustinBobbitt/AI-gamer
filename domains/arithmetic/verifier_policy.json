@@ -1,0 +1,89 @@
+{
+  "buckets": [
+    {
+      "max_bits": 16,
+      "fermat_budget": 4,
+      "train_metrics": {
+        "success_rate": 1,
+        "mean_checks": 5.255,
+        "p90_checks": 10.0,
+        "episodes": 200
+      },
+      "validation_metrics": {
+        "success_rate": 1,
+        "mean_checks": 5.275,
+        "p90_checks": 10.0,
+        "episodes": 200
+      }
+    },
+    {
+      "max_bits": 24,
+      "fermat_budget": 8,
+      "train_metrics": {
+        "success_rate": 1,
+        "mean_checks": 16.755,
+        "p90_checks": 37.0,
+        "episodes": 200
+      },
+      "validation_metrics": {
+        "success_rate": 1,
+        "mean_checks": 17.19,
+        "p90_checks": 38.0,
+        "episodes": 200
+      }
+    },
+    {
+      "max_bits": 32,
+      "fermat_budget": 128,
+      "train_metrics": {
+        "success_rate": 1,
+        "mean_checks": 121.485,
+        "p90_checks": 242.0,
+        "episodes": 200
+      },
+      "validation_metrics": {
+        "success_rate": 1,
+        "mean_checks": 121.74,
+        "p90_checks": 242.0,
+        "episodes": 200
+      }
+    },
+    {
+      "max_bits": 40,
+      "fermat_budget": 2048,
+      "train_metrics": {
+        "success_rate": 1,
+        "mean_checks": 1356.975,
+        "p90_checks": 2518.0,
+        "episodes": 200
+      },
+      "validation_metrics": {
+        "success_rate": 1,
+        "mean_checks": 1372.395,
+        "p90_checks": 2516.0,
+        "episodes": 200
+      }
+    },
+    {
+      "max_bits": 48,
+      "fermat_budget": 16384,
+      "train_metrics": {
+        "success_rate": 0.995,
+        "mean_checks": 11966.735,
+        "p90_checks": 18169.0,
+        "episodes": 200
+      },
+      "validation_metrics": {
+        "success_rate": 0.99,
+        "mean_checks": 12226.275,
+        "p90_checks": 18264.0,
+        "episodes": 200
+      }
+    }
+  ],
+  "training_seed": 20260919,
+  "validation_seed": 271828,
+  "train_manifest_hash": "3cbec94057e459da9792ec02197201cb47c3e6e926cbfa7bd4ea85f301a5abba",
+  "validation_manifest_hash": "e150409dd5c20be9b0b0987af5a04c7fabf14b9b4586a2ec116db5b8e8dbe20a",
+  "schema_version": 1
+}

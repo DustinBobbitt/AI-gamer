@@ -6,6 +6,7 @@ They are constraint-based updates to the belief state.
 """
 from __future__ import annotations
 
+import math
 import numpy as np
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -81,12 +82,12 @@ class ResidueConsistencyUpdate(Transform):
         )
 
 
-class NearSquareUpdate(Transform):
+class ExactSquareEvidenceUpdate(Transform):
     """
-    Update near-square score based on distance from perfect square.
-    
-    If N is close to a^2, then factors are likely balanced.
-    Uses: |ceil(√N)² - N| / N
+    Record exact perfect-square evidence without interpreting proximity.
+
+    Under a semiprime-square assumption an exact square supports p=q. A merely
+    nearby integer square carries no validated information about factor ratio.
     """
     
     def apply(self, state: BeliefState, N: int) -> TransformResult:
@@ -101,23 +102,29 @@ class NearSquareUpdate(Transform):
         )
         
         # Compute distance from nearest perfect square
-        sqrt_n = int(np.ceil(np.sqrt(N)))
+        sqrt_floor = math.isqrt(N)
+        sqrt_n = sqrt_floor if sqrt_floor * sqrt_floor == N else sqrt_floor + 1
         distance = abs(sqrt_n * sqrt_n - N)
-        relative_distance = distance / N
-        
-        # Update near-square score (closer = higher score)
-        new_state.near_square_score = 1.0 - min(relative_distance * 10.0, 1.0)
-        
-        # If very close to square, adjust size_ratio_estimate toward balanced
-        if relative_distance < 0.01:
-            new_state.size_ratio_estimate = 0.5 * (state.size_ratio_estimate + 0.9)
+        is_exact_square = distance == 0
+        new_state.near_square_score = 1.0 if is_exact_square else 0.0
+        if is_exact_square:
+            new_state.size_ratio_estimate = 1.0
         
         new_state.update_entropy()
         
         return TransformResult(
             new_state=new_state,
-            info={'sqrt_n': sqrt_n, 'distance': distance, 'relative_distance': relative_distance}
+            info={
+                'sqrt_n': sqrt_n,
+                'integer_square_gap': distance,
+                'is_exact_square': is_exact_square,
+            }
         )
+
+
+# Backward-compatible import alias. Runtime descriptions use the honest class
+# name because the transform registry instantiates ExactSquareEvidenceUpdate.
+NearSquareUpdate = ExactSquareEvidenceUpdate
 
 
 class SmoothnessHeuristicUpdate(Transform):
@@ -215,7 +222,7 @@ class TransformLibrary:
         """Return list of all available transforms."""
         return [
             ResidueConsistencyUpdate(),
-            NearSquareUpdate(),
+            ExactSquareEvidenceUpdate(),
             SmoothnessHeuristicUpdate(),
             ConstraintFusionUpdate()
         ]
